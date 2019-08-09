@@ -19,7 +19,7 @@ WINMAKE =	winmake.bat
 
 DIRS =		util syntax binary text valid runtime exec script host main
 LIBS =		bigarray
-FLAGS = 	-cflags '-w +a-3-4-27-42-44-45 -warn-error +a'
+FLAGS = 	-cflags '-w +a-3-4-27-42-44-45' -yaccflag -v
 OCB =		ocamlbuild $(FLAGS) $(DIRS:%=-I %) $(LIBS:%=-libs %)
 JS =		# set to JS shell command to run JS tests
 
@@ -28,7 +28,7 @@ JS =		# set to JS shell command to run JS tests
 
 .PHONY:		default opt unopt libopt libunopt jslib all land zip
 
-default:	opt
+default:	unopt
 debug:		unopt
 opt:		$(OPT)
 unopt:		$(UNOPT)
@@ -60,10 +60,10 @@ $(OPT):		main.native
 
 .PHONY:		main.byte main.native
 main.byte:	_tags
-		$(OCB) -quiet $@
+		$(OCB) $@
 
 main.native:	_tags
-		$(OCB) -quiet $@
+		$(OCB) $@
 
 
 # Building library
@@ -79,10 +79,10 @@ $(LIB).mlpack:	$(DIRS)
 		>$@
 
 _build/$(LIB).cmo: $(LIB).mlpack _tags
-		$(OCB) -quiet $(LIB).cmo
+		$(OCB) $(LIB).cmo
 
 _build/$(LIB).cmx: $(LIB).mlpack _tags
-		$(OCB) -quiet $(LIB).cmx
+		$(OCB) $(LIB).cmx
 
 
 # Building JavaScript library

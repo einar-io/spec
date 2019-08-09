@@ -161,6 +161,7 @@ rule token = parse
     { error_nest (Lexing.lexeme_end_p lexbuf) lexbuf "illegal escape" }
 
   | (nxx as t) { VALUE_TYPE (value_type t) }
+  | (nxx as t)".symbolic" { SYMBOLIC (value_type t) }
   | (nxx as t)".const"
     { let open Source in
       CONST (numop t
@@ -339,11 +340,13 @@ rule token = parse
   | "script" { SCRIPT }
   | "register" { REGISTER }
   | "invoke" { INVOKE }
+  | "symbolicinvoke" { SYMBOLIC_INVOKE }
   | "get" { GET }
   | "assert_malformed" { ASSERT_MALFORMED }
   | "assert_invalid" { ASSERT_INVALID }
   | "assert_unlinkable" { ASSERT_UNLINKABLE }
   | "assert_return" { ASSERT_RETURN }
+  | "assert_return" { SYMBOLIC_ASSERT_RETURN }
   | "assert_return_canonical_nan" { ASSERT_RETURN_CANONICAL_NAN }
   | "assert_return_arithmetic_nan" { ASSERT_RETURN_ARITHMETIC_NAN }
   | "assert_trap" { ASSERT_TRAP }

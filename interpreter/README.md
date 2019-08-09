@@ -365,22 +365,28 @@ However, to simplify the implementation, this AST representation represents some
 
 The implementation is split into several directories:
 
+Einar: This is interesting.
 * `syntax`: the definition of abstract syntax; corresponds to the "Structure" section of the language specification
 
 * `valid`: validation of code and modules; corresponds to the "Validation" section of the language specification
 
+Einar: This is maybe interesting.
 * `runtime`: the definition of runtime structures; corresponds to the "Execution/Runtime" section of the language specification
 
+Einar: This is maybe interesting.
 * `exec`: execution and module instantiation; corresponds to the "Execution" section of the language specification
 
 * `binary`: encoding and decoding of the binary format; corresponds to the "Binary Format" section of the language specification
 
+Einar: This is maybe interesting.
 * `text`: parsing and printing the S-expressions text format; corresponds to the "Text Format" section of the language specification
 
+Einar: This is maybe interesting.
 * `script`: abstract syntax and execution of the extended script language
 
 * `host`: definition of host environment modules
 
+Einar: This is maybe interesting.
 * `main`: main program
 
 * `util`: utility libraries.

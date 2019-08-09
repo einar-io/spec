@@ -1,5 +1,6 @@
 open Script
 open Source
+(* include Symeval *)
 
 
 (* Errors & Tracing *)
@@ -22,6 +23,7 @@ let sexpr_ext = "wat"
 let script_binary_ext = "bin.wast"
 let script_ext = "wast"
 let js_ext = "js"
+let smt_ext = "smt2"
 
 let dispatch_file_ext on_binary on_sexpr on_script_binary on_script on_js file =
   if Filename.check_suffix file binary_ext then
@@ -313,6 +315,17 @@ let run_action act =
     | None -> Assert.error act.at "undefined export"
     )
 
+  | SymbolicInvoke (x_opt, name, vs) ->
+    trace ("Symbolic invoking function \"" ^ Ast.string_of_name name ^ "\"...");
+    let inst = lookup_instance x_opt act.at in
+    (match Instance.export inst name with
+    | Some (Instance.ExternFunc f) ->
+      Symeval.symbolicinvoke f (List.map (fun v -> v.it) vs)
+      (* Eval.invoke f (List.map (fun v -> v.it) vs) *)
+    | Some _ -> Assert.error act.at "export is not a function"
+    | None -> Assert.error act.at "undefined export"
+    )
+
 let assert_result at correct got print_expect expect =
   if not correct then begin
     print_string "Result: "; print_result got;
@@ -421,6 +434,13 @@ let run_assertion ass =
       assert_message ass.at "exhaustion" msg re
     | _ -> Assert.error ass.at "expected exhaustion error"
     )
+(*
+  | SymbolicAssertReturn (act, vs) ->
+    trace ("Symbolically asserting return...");
+    let got_vs = run_action act in
+    let expect_vs = List.map (fun v -> v.it) vs in
+    assert_result ass.at (got_vs = expect_vs) got_vs print_result expect_vs
+*)
 
 let rec run_command cmd =
   match cmd.it with

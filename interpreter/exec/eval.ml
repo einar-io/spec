@@ -111,6 +111,7 @@ let drop n (vs : 'a stack) at =
  *   c : config
  *)
 
+(* Einar: This is relevant to the symStep fun*)
 let rec step (c : config) : config =
   let {frame; code = vs, es; _} = c in
   let e = List.hd es in

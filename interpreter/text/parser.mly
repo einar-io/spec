@@ -143,9 +143,10 @@ let inline_type_explicit (c : context) x ft at =
     error at "inline function type does not match explicit type";
   x
 
+
 %}
 
-%token NAT INT FLOAT STRING VAR VALUE_TYPE FUNCREF MUT LPAR RPAR
+%token NAT INT FLOAT STRING VAR VALUE_TYPE FUNCREF MUT LPAR RPAR SYMBOLIC
 %token NOP DROP BLOCK END IF THEN ELSE SELECT LOOP BR BR_IF BR_TABLE
 %token CALL CALL_INDIRECT RETURN
 %token LOCAL_GET LOCAL_SET LOCAL_TEE GLOBAL_GET GLOBAL_SET
@@ -155,9 +156,9 @@ let inline_type_explicit (c : context) x ft at =
 %token FUNC START TYPE PARAM RESULT LOCAL GLOBAL
 %token TABLE ELEM MEMORY DATA OFFSET IMPORT EXPORT TABLE
 %token MODULE BIN QUOTE
-%token SCRIPT REGISTER INVOKE GET
+%token SCRIPT REGISTER INVOKE GET SYMBOLIC_INVOKE
 %token ASSERT_MALFORMED ASSERT_INVALID ASSERT_SOFT_INVALID ASSERT_UNLINKABLE
-%token ASSERT_RETURN ASSERT_RETURN_CANONICAL_NAN ASSERT_RETURN_ARITHMETIC_NAN ASSERT_TRAP ASSERT_EXHAUSTION
+%token ASSERT_RETURN ASSERT_RETURN_CANONICAL_NAN ASSERT_RETURN_ARITHMETIC_NAN ASSERT_TRAP ASSERT_EXHAUSTION SYMBOLIC_ASSERT_RETURN
 %token INPUT OUTPUT
 %token EOF
 
@@ -167,6 +168,7 @@ let inline_type_explicit (c : context) x ft at =
 %token<string> STRING
 %token<string> VAR
 %token<Types.value_type> VALUE_TYPE
+%token<Types.value_type> SYMBOLIC
 %token<string Source.phrase -> Ast.instr' * Values.value> CONST
 %token<Ast.instr'> UNARY
 %token<Ast.instr'> BINARY
@@ -180,6 +182,7 @@ let inline_type_explicit (c : context) x ft at =
 
 %nonassoc LOW
 %nonassoc VAR
+//%nonassoc SYMBOLIC
 
 %start script script1 module1
 %type<Script.script> script
@@ -807,6 +810,8 @@ cmd :
   | script_module { Module (fst $1, snd $1) @@ at () }
   | LPAR REGISTER name module_var_opt RPAR { Register ($3, $4) @@ at () }
   | meta { Meta $1 @@ at () }
+/*| symbolic_action { SymbolicAction $1 @@ at () } */
+  | symbolic_assertion { SymbolicAssertion $1 @@ at () }
 
 cmd_list :
   | /* empty */ { [] }
@@ -835,4 +840,21 @@ script1 :
 module1 :
   | module_ EOF { $1 }
   | inline_module EOF { None, $1 }  /* Sugar */
+
+/* Symbolic production rules */
+
+symbolic :
+  | LPAR SYMBOLIC VAR RPAR { Symbolic (($2, $3) @@ ati 2) @@ at () }
+
+symbolic_list :
+  | symbolic { [$1] } /* at least one */
+  | symbolic symbolic_list { $1 :: $2 }
+
+symbolic_action :
+  | LPAR SYMBOLIC_INVOKE module_var_opt name symbolic_list RPAR
+    { SymbolicInvoke ($3, $4, $5) @@ at () }
+
+symbolic_assertion :
+  | LPAR SYMBOLIC_ASSERT_RETURN symbolic_action symbolic_list RPAR 
+    { SymbolicAssertReturn ($3, $4) @@ at () }
 %%

@@ -161,6 +161,7 @@ let encode m =
       | Drop -> op 0x1a
       | Select -> op 0x1b
 
+      | Symbolic x -> op 0xee
       | LocalGet x -> op 0x20; var x
       | LocalSet x -> op 0x21; var x
       | LocalTee x -> op 0x22; var x

@@ -31,6 +31,7 @@ let argspec = Arg.align
   "-h", Arg.Clear Flags.harness, " exclude harness for JS convesion";
   "-d", Arg.Set Flags.dry, " dry, do not run program";
   "-t", Arg.Set Flags.trace, " trace execution";
+  "-S", Arg.Set Flags.symbolic, " symbolic execution";
   "-v", Arg.Unit banner, " show version"
 ]
 
@@ -48,7 +49,7 @@ let () =
       Run.run_stdin ()
     end
   with exn ->
-    flush_all ();
+      flush_all ();
     prerr_endline
       (Sys.argv.(0) ^ ": uncaught exception " ^ Printexc.to_string exn);
     Printexc.print_backtrace stderr;
