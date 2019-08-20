@@ -23,7 +23,7 @@ let sexpr_ext = "wat"
 let script_binary_ext = "bin.wast"
 let script_ext = "wast"
 let js_ext = "js"
-let smt_ext = "smt2"
+let wasy_ext = "wasy"
 
 let dispatch_file_ext on_binary on_sexpr on_script_binary on_script on_js file =
   if Filename.check_suffix file binary_ext then
@@ -294,6 +294,20 @@ let rec run_definition def =
     let def' = Parse.string_to_module s in
     run_definition def'
 
+let run_symbolic_action symact =
+  match symact.it with
+  | SymbolicInvoke (x_opt, name, vs) ->
+    trace ("Symbolic invoking function \"" ^ Ast.string_of_name name ^ "\"...");
+    let inst = lookup_instance x_opt symact.at in
+    (match Instance.export inst name with
+    | Some (Instance.ExternFunc f) ->
+      Symeval.symbolic_invoke f (List.map (fun v -> v.it) vs)
+      (* Eval.invoke f (List.map (fun v -> v.it) vs) *)
+    | Some _ -> Assert.error symact.at "export is not a function"
+    | None -> Assert.error symact.at "undefined export"
+    )
+
+
 let run_action act =
   match act.it with
   | Invoke (x_opt, name, vs) ->
@@ -315,16 +329,6 @@ let run_action act =
     | None -> Assert.error act.at "undefined export"
     )
 
-  | SymbolicInvoke (x_opt, name, vs) ->
-    trace ("Symbolic invoking function \"" ^ Ast.string_of_name name ^ "\"...");
-    let inst = lookup_instance x_opt act.at in
-    (match Instance.export inst name with
-    | Some (Instance.ExternFunc f) ->
-      Symeval.symbolicinvoke f (List.map (fun v -> v.it) vs)
-      (* Eval.invoke f (List.map (fun v -> v.it) vs) *)
-    | Some _ -> Assert.error act.at "export is not a function"
-    | None -> Assert.error act.at "undefined export"
-    )
 
 let assert_result at correct got print_expect expect =
   if not correct then begin
@@ -434,13 +438,17 @@ let run_assertion ass =
       assert_message ass.at "exhaustion" msg re
     | _ -> Assert.error ass.at "expected exhaustion error"
     )
-(*
+
+
+let run_symbolic_assertion symass =
+  print_endline "was here";
+  match symass.it with
   | SymbolicAssertReturn (act, vs) ->
     trace ("Symbolically asserting return...");
-    let got_vs = run_action act in
+    let got_vs = run_symbolic_action act in
     let expect_vs = List.map (fun v -> v.it) vs in
-    assert_result ass.at (got_vs = expect_vs) got_vs print_result expect_vs
-*)
+    assert_result symass.at (got_vs = expect_vs) got_vs print_result expect_vs
+
 
 let rec run_command cmd =
   match cmd.it with
@@ -469,7 +477,7 @@ let rec run_command cmd =
     if not !Flags.dry then begin
       trace ("Registering module \"" ^ Ast.string_of_name name ^ "\"...");
       let inst = lookup_instance x_opt cmd.at in
-      registry := Map.add (Utf8.encode name) inst !registry;
+     registry := Map.add (Utf8.encode name) inst !registry;
       Import.register name (lookup_registry (Utf8.encode name))
     end
 
@@ -484,6 +492,12 @@ let rec run_command cmd =
     quote := cmd :: !quote;
     if not !Flags.dry then begin
       run_assertion ass
+    end
+
+  | SymbolicAssertion symass ->
+    quote := cmd :: !quote;
+    if not !Flags.dry then begin
+      run_symbolic_assertion symass
     end
 
   | Meta cmd ->

@@ -855,6 +855,6 @@ symbolic_action :
     { SymbolicInvoke ($3, $4, $5) @@ at () }
 
 symbolic_assertion :
-  | LPAR SYMBOLIC_ASSERT_RETURN symbolic_action symbolic_list RPAR 
+  | LPAR SYMBOLIC_ASSERT_RETURN symbolic_action const_list RPAR
     { SymbolicAssertReturn ($3, $4) @@ at () }
 %%

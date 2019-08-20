@@ -9,8 +9,11 @@ and definition' =
 type action = action' Source.phrase
 and action' =
   | Invoke of var option * Ast.name * Ast.literal list
-  | SymbolicInvoke of var option * Ast.name * (Ast.instr' Source.phrase) list
   | Get of var option * Ast.name
+
+type symbolicaction = symbolicaction' Source.phrase
+and symbolicaction' =
+  | SymbolicInvoke of var option * Ast.name * (Ast.instr' Source.phrase) list
 
 type assertion = assertion' Source.phrase
 and assertion' =
@@ -26,7 +29,7 @@ and assertion' =
 
 type symbolicassertion = symbolicassertion' Source.phrase
 and symbolicassertion' =
-  | SymbolicAssertReturn of action * (Ast.instr' Source.phrase) list
+  | SymbolicAssertReturn of symbolicaction * Ast.literal list
 
 type command = command' Source.phrase
 and command' =

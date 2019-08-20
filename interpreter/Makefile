@@ -28,7 +28,7 @@ JS =		# set to JS shell command to run JS tests
 
 .PHONY:		default opt unopt libopt libunopt jslib all land zip
 
-default:	unopt
+default:	opt
 debug:		unopt
 opt:		$(OPT)
 unopt:		$(UNOPT)
