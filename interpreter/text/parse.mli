@@ -2,10 +2,6 @@ type 'a start =
   | Module : (Script.var option * Script.definition) start
   | Script : Script.script start
   | Script1 : Script.script start
-(*
-  | Symbolic : Symbolic.symbolic start
-  | Symbolic1 : Symbolic.symbolic start
-*)
 
 exception Syntax of Source.region * string
 
