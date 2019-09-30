@@ -162,7 +162,7 @@ rule token = parse
 
   | "symbolic_assert_return" { SYMBOLIC_ASSERT_RETURN }
   | "symbolic_invoke" { SYMBOLIC_INVOKE }
-  | (nxx as t)".symbolic" { SYMBOLIC (value_type t) }
+  | (nxx as t)".symbolic" { SYMBOLIC_VAR (value_type t) }
 
   | (nxx as t) { VALUE_TYPE (value_type t) }
   | (nxx as t)".const"

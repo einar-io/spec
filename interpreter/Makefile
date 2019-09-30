@@ -19,7 +19,7 @@ WINMAKE =	winmake.bat
 
 DIRS =		util syntax binary text valid runtime exec script host main
 LIBS =		bigarray
-FLAGS = 	-cflags '-w +a-3-4-27-42-44-45' -yaccflag -v
+FLAGS = 	-cflags '-w +a-3-4-27-42-44-45' -yaccflag -v -cflag -g
 OCB =		ocamlbuild $(FLAGS) $(DIRS:%=-I %) $(LIBS:%=-libs %)
 JS =		# set to JS shell command to run JS tests
 
@@ -157,3 +157,11 @@ install:	_build/$(LIB).cmx _build/$(LIB).cmo
 
 uninstall:
 		ocamlfind remove $(LIB)
+
+.PHONY:		playground
+playground:	libunopt
+		utop -I _build bigarray.cma wasm.cmo
+
+.PHONY:		ctags
+ctags: 		
+		ctags --recurse=yes --sort=yes --totals=yes --verbose=yes #-f ctags

@@ -1,5 +1,8 @@
 type var = string Source.phrase
 
+type symbolic = symbolic' Source.phrase
+and symbolic' = SymbolicVar of Types.value_type * string
+
 type definition = definition' Source.phrase
 and definition' =
   | Textual of Ast.module_
@@ -13,7 +16,7 @@ and action' =
 
 type symbolicaction = symbolicaction' Source.phrase
 and symbolicaction' =
-  | SymbolicInvoke of var option * Ast.name * (Ast.instr' Source.phrase) list
+  | SymbolicInvoke of var option * Ast.name * symbolic list
 
 type assertion = assertion' Source.phrase
 and assertion' =

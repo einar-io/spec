@@ -58,6 +58,8 @@ and admin_instr' =
   | Label of int * instr list * code
   | Frame of int * frame * code
 
+type symcode = Script.symbolic stack * admin_instr list
+
 type config =
 {
   frame : frame;
@@ -65,8 +67,16 @@ type config =
   budget : int;  (* to model stack overflow *)
 }
 
+type symconfig =
+{
+  frame : frame;
+  symcode : symcode;
+  budget : int;  (* to model stack overflow *)
+}
+
 let frame inst locals = {inst; locals}
 let config inst vs es = {frame = frame inst []; code = vs, es; budget = 300}
+let symconfig inst symvs es = {frame = frame inst []; symcode = symvs, es; budget = 300}
 
 let plain e = Plain e.it @@ e.at
 
@@ -112,7 +122,9 @@ let drop n (vs : 'a stack) at =
  *   c : config
  *)
 
-let rec symstep (c : config) : config = c
+
+(* let rec symstep (c : config) : config = c *)
+let rec step (c : config) : config = c 
 
 (*
 let rec symstep1 (c : config) : config =
@@ -124,89 +136,89 @@ let rec symstep1 (c : config) : config =
       (match e', vs with
 *)
 
-(* Einar: This is relevant to the symStep fun*)
-let rec symstep2 (c : config) : config =
-  let {frame; code = vs, es; _} = c in
+let rec symstep (c : symconfig) : symconfig =
+  let {frame; symcode = symvs, es; _} = c in
   let e = List.hd es in
-  let vs', es' =
-    match e.it, vs with
-    | Plain e', vs ->
-      (match e', vs with
-      | Unreachable, vs ->
-        vs, [Trapping "unreachable executed" @@ e.at]
+  let symvs', es' =
+    match e.it, symvs with
+    | Plain e', symvs ->
+      (match e', symvs with
+      | Unreachable, symvs ->
+        symvs, [Trapping "unreachable executed" @@ e.at]
 
-      | Nop, vs ->
-        vs, []
+      | Nop, symvs ->
+        symvs, []
 
-      | Block (ts, es'), vs ->
-        vs, [Label (List.length ts, [], ([], List.map plain es')) @@ e.at]
+        (*
+      | Block (ts, es'), symvs ->
+        symvs, [Label (List.length ts, [], ([], List.map plain es')) @@ e.at]
 
-      | Loop (ts, es'), vs ->
-        vs, [Label (0, [e' @@ e.at], ([], List.map plain es')) @@ e.at]
+      | Loop (ts, es'), symvs ->
+        symvs, [Label (0, [e' @@ e.at], ([], List.map plain es')) @@ e.at]
 
-      | If (ts, es1, es2), I32 0l :: vs' ->
-        vs', [Plain (Block (ts, es2)) @@ e.at]
+      | If (ts, es1, es2), I32 0l :: symvs' ->
+        symvs', [Plain (Block (ts, es2)) @@ e.at]
 
-      | If (ts, es1, es2), I32 i :: vs' ->
-        vs', [Plain (Block (ts, es1)) @@ e.at]
+      | If (ts, es1, es2), I32 i :: symvs' ->
+        symvs', [Plain (Block (ts, es1)) @@ e.at]
 
-      | Br x, vs ->
-        [], [Breaking (x.it, vs) @@ e.at]
+      | Br x, symvs ->
+        [], [Breaking (x.it, symvs) @@ e.at]
 
-      | BrIf x, I32 0l :: vs' ->
-        vs', []
+      | BrIf x, I32 0l :: symvs' ->
+        symvs', []
 
-      | BrIf x, I32 i :: vs' ->
-        vs', [Plain (Br x) @@ e.at]
+      | BrIf x, I32 i :: symvs' ->
+        symvs', [Plain (Br x) @@ e.at]
 
-      | BrTable (xs, x), I32 i :: vs' when I32.ge_u i (Lib.List32.length xs) ->
-        vs', [Plain (Br x) @@ e.at]
+      | BrTable (xs, x), I32 i :: symvs' when I32.ge_u i (Lib.List32.length xs) ->
+        symvs', [Plain (Br x) @@ e.at]
 
-      | BrTable (xs, x), I32 i :: vs' ->
-        vs', [Plain (Br (Lib.List32.nth xs i)) @@ e.at]
+      | BrTable (xs, x), I32 i :: symvs' ->
+        symvs', [Plain (Br (Lib.List32.nth xs i)) @@ e.at]
 
-      | Return, vs ->
-        vs, [Returning vs @@ e.at]
+      | Return, symvs ->
+        symvs, [Returning symvs @@ e.at]
 
-      | Call x, vs ->
-        vs, [Invoke (func frame.inst x) @@ e.at]
+      | Call x, symvs ->
+        symvs, [Invoke (func frame.inst x) @@ e.at]
 
-      | CallIndirect x, I32 i :: vs ->
+      | CallIndirect x, I32 i :: symvs ->
         let func = func_elem frame.inst (0l @@ e.at) i e.at in
         if type_ frame.inst x <> Func.type_of func then
-          vs, [Trapping "indirect call type mismatch" @@ e.at]
+          symvs, [Trapping "indirect call type mismatch" @@ e.at]
         else
-          vs, [Invoke func @@ e.at]
+          symvs, [Invoke func @@ e.at]
 
-      | Drop, v :: vs' ->
-        vs', []
+      | Drop, v :: symvs' ->
+        symvs', []
 
-      | Select, I32 0l :: v2 :: v1 :: vs' ->
-        v2 :: vs', []
+      | Select, I32 0l :: v2 :: v1 :: symvs' ->
+        v2 :: symvs', []
 
-      | Select, I32 i :: v2 :: v1 :: vs' ->
-        v1 :: vs', []
+      | Select, I32 i :: v2 :: v1 :: symvs' ->
+        v1 :: symvs', []
 
-      | LocalGet x, vs ->
-        !(local frame x) :: vs, []
+      | LocalGet x, symvs ->
+        !(local frame x) :: symvs, []
 
-      | LocalSet x, v :: vs' ->
+      | LocalSet x, v :: symvs' ->
         local frame x := v;
-        vs', []
+        symvs', []
 
-      | LocalTee x, v :: vs' ->
+      | LocalTee x, v :: symvs' ->
         local frame x := v;
-        v :: vs', []
+        v :: symvs', []
 
-      | GlobalGet x, vs ->
-        Global.load (global frame.inst x) :: vs, []
+      | GlobalGet x, symvs ->
+        Global.load (global frame.inst x) :: symvs, []
 
-      | GlobalSet x, v :: vs' ->
-        (try Global.store (global frame.inst x) v; vs', []
+      | GlobalSet x, v :: symvs' ->
+        (try Global.store (global frame.inst x) v; symvs', []
         with Global.NotMutable -> Crash.error e.at "write to immutable global"
            | Global.Type -> Crash.error e.at "type mismatch at global write")
 
-      | Load {offset; ty; sz; _}, I32 i :: vs' ->
+      | Load {offset; ty; sz; _}, I32 i :: symvs' ->
         let mem = memory frame.inst (0l @@ e.at) in
         let addr = I64_convert.extend_i32_u i in
         (try
@@ -214,10 +226,10 @@ let rec symstep2 (c : config) : config =
             match sz with
             | None -> Memory.load_value mem addr offset ty
             | Some (sz, ext) -> Memory.load_packed sz ext mem addr offset ty
-          in v :: vs', []
-        with exn -> vs', [Trapping (memory_error e.at exn) @@ e.at])
+          in v :: symvs', []
+        with exn -> symvs', [Trapping (memory_error e.at exn) @@ e.at])
 
-      | Store {offset; sz; _}, v :: I32 i :: vs' ->
+      | Store {offset; sz; _}, v :: I32 i :: symvs' ->
         let mem = memory frame.inst (0l @@ e.at) in
         let addr = I64_convert.extend_i32_u i in
         (try
@@ -225,127 +237,130 @@ let rec symstep2 (c : config) : config =
           | None -> Memory.store_value mem addr offset v
           | Some sz -> Memory.store_packed sz mem addr offset v
           );
-          vs', []
-        with exn -> vs', [Trapping (memory_error e.at exn) @@ e.at]);
+          symvs', []
+        with exn -> symvs', [Trapping (memory_error e.at exn) @@ e.at]);
 
-      | MemorySize, vs ->
+      | MemorySize, symvs ->
         let mem = memory frame.inst (0l @@ e.at) in
-        I32 (Memory.size mem) :: vs, []
+        I32 (Memory.size mem) :: symvs, []
 
-      | MemoryGrow, I32 delta :: vs' ->
+      | MemoryGrow, I32 delta :: symvs' ->
         let mem = memory frame.inst (0l @@ e.at) in
         let old_size = Memory.size mem in
         let result =
           try Memory.grow mem delta; old_size
           with Memory.SizeOverflow | Memory.SizeLimit | Memory.OutOfMemory -> -1l
-        in I32 result :: vs', []
+        in I32 result :: symvs', []
 
-      | Const v, vs ->
-        v.it :: vs, []
+      | Const v, symvs ->
+        v.it :: symvs, []
 
-      | Test testop, v :: vs' ->
-        (try value_of_bool (Eval_numeric.eval_testop testop v) :: vs', []
-        with exn -> vs', [Trapping (numeric_error e.at exn) @@ e.at])
+      | Test testop, v :: symvs' ->
+        (try value_of_bool (Eval_numeric.eval_testop testop v) :: symvs', []
+        with exn -> symvs', [Trapping (numeric_error e.at exn) @@ e.at])
 
-      | Compare relop, v2 :: v1 :: vs' ->
-        (try value_of_bool (Eval_numeric.eval_relop relop v1 v2) :: vs', []
-        with exn -> vs', [Trapping (numeric_error e.at exn) @@ e.at])
+      | Compare relop, v2 :: v1 :: symvs' ->
+        (try value_of_bool (Eval_numeric.eval_relop relop v1 v2) :: symvs', []
+        with exn -> symvs', [Trapping (numeric_error e.at exn) @@ e.at])
 
-      | Unary unop, v :: vs' ->
-        (try Eval_numeric.eval_unop unop v :: vs', []
-        with exn -> vs', [Trapping (numeric_error e.at exn) @@ e.at])
+      | Unary unop, v :: symvs' ->
+        (try Eval_numeric.eval_unop unop v :: symvs', []
+        with exn -> symvs', [Trapping (numeric_error e.at exn) @@ e.at])
 
-      | Binary binop, v2 :: v1 :: vs' ->
-        (try Eval_numeric.eval_binop binop v1 v2 :: vs', []
-        with exn -> vs', [Trapping (numeric_error e.at exn) @@ e.at])
+      | Binary binop, v2 :: v1 :: symvs' ->
+        (try Eval_numeric.eval_binop binop v1 v2 :: symvs', []
+        with exn -> symvs', [Trapping (numeric_error e.at exn) @@ e.at])
 
-      | Convert cvtop, v :: vs' ->
-        (try Eval_numeric.eval_cvtop cvtop v :: vs', []
-        with exn -> vs', [Trapping (numeric_error e.at exn) @@ e.at])
+      | Convert cvtop, v :: symvs' ->
+        (try Eval_numeric.eval_cvtop cvtop v :: symvs', []
+        with exn -> symvs', [Trapping (numeric_error e.at exn) @@ e.at])
 
       | _ ->
-        let s1 = string_of_values (List.rev vs) in
-        let s2 = string_of_value_types (List.map type_of (List.rev vs)) in
+        let s1 = string_of_values (List.rev symvs) in
+        let s2 = string_of_value_types (List.map type_of (List.rev symvs)) in
         Crash.error e.at
           ("missing or ill-typed operand on stack (" ^ s1 ^ " : " ^ s2 ^ ")")
+      *)
       )
 
-    | Trapping msg, vs ->
+      (*
+    | Trapping msg, symvs ->
       assert false
 
-    | Returning vs', vs ->
+    | Returning symvs', symvs ->
       Crash.error e.at "undefined frame"
 
-    | Breaking (k, vs'), vs ->
+    | Breaking (k, symvs'), symvs ->
       Crash.error e.at "undefined label"
 
-    | Label (n, es0, (vs', [])), vs ->
-      vs' @ vs, []
+    | Label (n, es0, (symvs', [])), symvs ->
+      symvs' @ symvs, []
 
-    | Label (n, es0, (vs', {it = Trapping msg; at} :: es')), vs ->
-      vs, [Trapping msg @@ at]
+    | Label (n, es0, (symvs', {it = Trapping msg; at} :: es')), symvs ->
+      symvs, [Trapping msg @@ at]
 
-    | Label (n, es0, (vs', {it = Returning vs0; at} :: es')), vs ->
-      vs, [Returning vs0 @@ at]
+    | Label (n, es0, (symvs', {it = Returning symvs0; at} :: es')), symvs ->
+      symvs, [Returning symvs0 @@ at]
 
-    | Label (n, es0, (vs', {it = Breaking (0l, vs0); at} :: es')), vs ->
-      take n vs0 e.at @ vs, List.map plain es0
+    | Label (n, es0, (symvs', {it = Breaking (0l, symvs0); at} :: es')), symvs ->
+      take n symvs0 e.at @ symvs, List.map plain es0
 
-    | Label (n, es0, (vs', {it = Breaking (k, vs0); at} :: es')), vs ->
-      vs, [Breaking (Int32.sub k 1l, vs0) @@ at]
+    | Label (n, es0, (symvs', {it = Breaking (k, symvs0); at} :: es')), symvs ->
+      symvs, [Breaking (Int32.sub k 1l, symvs0) @@ at]
 
-    | Label (n, es0, code'), vs ->
-      let c' = symstep {c with code = code'} in
-      vs, [Label (n, es0, c'.code) @@ e.at]
+    | Label (n, es0, code'), symvs ->
+      let c' = symstep {c with symcode = code'} in
+      symvs, [Label (n, es0, c'.symcode) @@ e.at]
 
-    | Frame (n, frame', (vs', [])), vs ->
-      vs' @ vs, []
+    | Frame (n, frame', (symvs', [])), symvs ->
+      symvs' @ symvs, []
 
-    | Frame (n, frame', (vs', {it = Trapping msg; at} :: es')), vs ->
-      vs, [Trapping msg @@ at]
+    | Frame (n, frame', (symvs', {it = Trapping msg; at} :: es')), symvs ->
+      symvs, [Trapping msg @@ at]
 
-    | Frame (n, frame', (vs', {it = Returning vs0; at} :: es')), vs ->
-      take n vs0 e.at @ vs, []
+    | Frame (n, frame', (symvs', {it = Returning symvs0; at} :: es')), symvs ->
+      take n symvs0 e.at @ symvs, []
 
-    | Frame (n, frame', code'), vs ->
+    | Frame (n, frame', code'), symvs ->
       let c' = symstep {frame = frame'; code = code'; budget = c.budget - 1} in
-      vs, [Frame (n, c'.frame, c'.code) @@ e.at]
+      symvs, [Frame (n, c'.frame, c'.code) @@ e.at]
 
-    | Invoke func, vs when c.budget = 0 ->
+    | Invoke func, symvs when c.budget = 0 ->
       Exhaustion.error e.at "call stack exhausted"
 
-    | SymbolicInvoke func, vs ->
+    | SymbolicInvoke func, symvs ->
       let FuncType (ins, out) = Func.type_of func in
       let n = List.length ins in
-      let args, vs' = take n vs e.at, drop n vs e.at in
+      let args, symvs' = take n symvs e.at, drop n symvs e.at in
       (match func with
       | Func.AstFunc (t, inst', f) ->
         let locals' = List.rev args @ List.map default_value f.it.locals in
         let code' = [], [Plain (Block (out, f.it.body)) @@ f.at] in
         let frame' = {inst = !inst'; locals = List.map ref locals'} in
-        vs', [Frame (List.length out, frame', code') @@ e.at]
+        symvs', [Frame (List.length out, frame', code') @@ e.at]
 
       | Func.HostFunc (t, f) ->
-        try List.rev (f (List.rev args)) @ vs', []
+        try List.rev (f (List.rev args)) @ symvs', []
         with Crash (_, msg) -> Crash.error e.at msg
       )
 
-    | Invoke func, vs ->
+    | Invoke func, symvs ->
       let FuncType (ins, out) = Func.type_of func in
       let n = List.length ins in
-      let args, vs' = take n vs e.at, drop n vs e.at in
+      let args, symvs' = take n symvs e.at, drop n symvs e.at in
       (match func with
       | Func.AstFunc (t, inst', f) ->
         let locals' = List.rev args @ List.map default_value f.it.locals in
         let code' = [], [Plain (Block (out, f.it.body)) @@ f.at] in
         let frame' = {inst = !inst'; locals = List.map ref locals'} in
-        vs', [Frame (List.length out, frame', code') @@ e.at]
+        symvs', [Frame (List.length out, frame', code') @@ e.at]
 
       | Func.HostFunc (t, f) ->
-        try List.rev (f (List.rev args)) @ vs', []
+        try List.rev (f (List.rev args)) @ symvs', []
         with Crash (_, msg) -> Crash.error e.at msg
       )
-  in {c with code = vs', es' @ List.tl es}
+      *)
+  in {c with symcode = symvs', es' @ List.tl es}
 
 
 let rec eval (c : config) : value stack =
@@ -357,40 +372,33 @@ let rec eval (c : config) : value stack =
     Trap.error at msg
 
   | vs, es ->
-    eval (symstep c)
+    eval (step c)
 
+let rec symeval (c : symconfig) : Script.symbolic stack =
+  match c.symcode with
+  | vs, [] ->
+    vs
+
+  | vs, {it = Trapping msg; at} :: _ ->
+    Trap.error at msg
+
+  | vs, es ->
+    symeval (symstep c)
 
 (* Functions & Constants *)
 
-let symbolic_invoke (func: func_inst) (vs : Ast.instr' list) : value list =
-  print_endline "debug: symbolic_invoke";
-  []
-  (*
+let symbolic_invoke (func: func_inst) (symvs : Script.symbolic stack)
+    : Script.symbolic stack =
+  print_endline "debug: symbolic_invoke.";
   let at = match func with Func.AstFunc (_,_, f) -> f.at | _ -> no_region in
+  (* Disable param checker
+  (* ins, out : stack_type *)
   let FuncType (ins, out) = Func.type_of func in
   if List.map Values.type_of vs <> ins then
     Crash.error at "wrong number or types of arguments";
-  let c = config empty_module_inst (List.rev vs) [SymbolicInvoke func @@ at] in
-  try List.rev (eval c) with Stack_overflow ->
-    Exhaustion.error at "call stack exhausted"
-  *)
-
-
-
-let symbolic_invoke0 _ (vs : Ast.instr' list) : value list = print_endline "was here"; [] 
-
-
-let symbolic_invoke3 _ (vs : Ast.instr' list) : value list = []
-
-let symbolic_invoke2 _ (vs : (Types.value_type * string) list) : value list = [] 
-
-let symbolic_invoke1 (func : func_inst) (vs : value list) : value list =
-  let at = match func with Func.AstFunc (_,_, f) -> f.at | _ -> no_region in
-  let FuncType (ins, out) = Func.type_of func in
-  if List.map Values.type_of vs <> ins then
-    Crash.error at "wrong number or types of arguments";
-  let c = config empty_module_inst (List.rev vs) [Invoke func @@ at] in
-  try List.rev (eval c) with Stack_overflow ->
+    *)
+  let c = symconfig empty_module_inst (List.rev symvs) [SymbolicInvoke func @@ at] in
+  try List.rev (symeval c) with Stack_overflow ->
     Exhaustion.error at "call stack exhausted"
 
 let eval_const (inst : module_inst) (const : const) : value =

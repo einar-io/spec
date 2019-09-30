@@ -65,7 +65,6 @@ type storeop = Memory.pack_size memop
 type var = int32 Source.phrase
 type literal = Values.value Source.phrase
 type name = int list
-type symbolic = (Types.value_type * string) Source.phrase
 
 type instr = instr' Source.phrase
 and instr' =
@@ -97,7 +96,7 @@ and instr' =
   | Unary of unop                     (* unary numeric operator *)
   | Binary of binop                   (* binary numeric operator *)
   | Convert of cvtop                  (* conversion *)
-  | Symbolic of symbolic              (* symbolic *) 
+ (* | Symbolic of symbolic              (* symbolic *)  *)
 
 (* Globals & Functions *)
 

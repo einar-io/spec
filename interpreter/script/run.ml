@@ -1,6 +1,5 @@
 open Script
 open Source
-(* include Symeval *)
 
 
 (* Errors & Tracing *)
@@ -441,7 +440,6 @@ let run_assertion ass =
 
 
 let run_symbolic_assertion symass =
-  print_endline "was here";
   match symass.it with
   | SymbolicAssertReturn (act, vs) ->
     trace ("Symbolically asserting return...");
