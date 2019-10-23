@@ -8,15 +8,16 @@ open Int32
  * https://stackoverflow.com/a/53131220 *)
 let (+) a b = Int32.add a b
 
+(* key : int32 -> value : int32 *)
 module Store = Map.Make(Int32)
 
 type word = int32
 
-type pc = word
+type ip = word
 type mem = word Store.t
 type stack = word list
 (* Program state: (Instruction pointer, Store, Stack) *)
-type state = pc * mem * stack
+type state = ip * mem * stack
 
 type instr =
     | Add
@@ -30,12 +31,14 @@ type instr =
     | Swap
     | Dup
     | Over
+    | Print
     | RotL
     | Read
-    | Print
+    | Trace
+    | Show
     | JmpIf
-    | Load
     | Store
+    | Load
     | Done
 
 let maxpc = 16l
@@ -43,7 +46,7 @@ let init_state : state = (0l, Store.empty, [])
 
 let (>>=) = bind (* Batteries.Option.bind *)
 
-let print_pc pc = print_endline @@ "PC: " ^ Int32.to_string pc
+let print_ip ip = print_endline @@ "IP: " ^ Int32.to_string ip
 
 
 let print_mem_pair key value = print_endline
@@ -57,30 +60,19 @@ let print_mem mem = print_endline "";
                     Store.iter print_mem_pair mem;
                     print_endline ""
 
-let print_stackold stack =
-    print_endline
-    @@ "Stack content is: ["
-    ^ let prefix =
-        match stack with
-        | hd::[] -> Int32.to_string hd
-        | hd::tl -> Int32.to_string hd
-                    ^  List.fold_left (^) ";"
-                    @@ List.map Int32.to_string tl
-        | []     -> "(empty)"
-    in prefix ^ "]"
 
 let print_stack stackold =
-    let stack = List.rev stackold in
     let rec print_elems stack =
         match stack with
         | hd::[] -> Int32.to_string hd
         | hd::tl -> Int32.to_string hd ^ "|" ^ print_elems tl
         | []     -> "<empty>"
-    in print_endline
-    @@ "Stack: [" ^  print_elems stack ^  "]"
+    in
+    let stack = List.rev stackold in
+    print_endline @@ "Stack: [" ^  print_elems stack ^  "]"
 
-let print_state (pc, mem, stack) =
-    print_pc      pc;
+let print_state (ip, mem, stack) =
+    print_ip      ip;
     print_mem     mem;
     print_stack   stack
 
@@ -95,24 +87,24 @@ let ld addr mem =
 
 
 let substitute
-?pc ?mem ?stack (oldpc, oldmem, oldstack) : state option =
-    let nextpc = oldpc + 1l in
-    match pc, mem, stack with
-    | None       , None        , None          -> Some (nextpc , oldmem , oldstack)
+?ip ?mem ?stack (oldip, oldmem, oldstack) : state option =
+    let nextip = oldip + 1l in
+    match ip, mem, stack with
+    | None       , None        , None          -> Some (nextip , oldmem , oldstack)
 
-    | Some newpc , None        , None          -> Some (newpc  , oldmem , oldstack)
-    | None       , Some newmem , None          -> Some (nextpc , newmem , oldstack)
-    | None       , None        , Some newstack -> Some (nextpc , oldmem , newstack)
+    | Some newip , None        , None          -> Some (newip  , oldmem , oldstack)
+    | None       , Some newmem , None          -> Some (nextip , newmem , oldstack)
+    | None       , None        , Some newstack -> Some (nextip , oldmem , newstack)
 
-    | None       , Some newmem , Some newstack -> Some (nextpc , newmem , newstack)
-    | Some newpc , None        , Some newstack -> Some (newpc  , oldmem , newstack)
-    | Some newpc , Some newmem , None          -> Some (newpc  , newmem , oldstack)
+    | None       , Some newmem , Some newstack -> Some (nextip , newmem , newstack)
+    | Some newip , None        , Some newstack -> Some (newip  , oldmem , newstack)
+    | Some newip , Some newmem , None          -> Some (newip  , newmem , oldstack)
 
-    | Some newpc , Some newmem , Some newstack -> Some (newpc  , newmem , newstack)
+    | Some newip , Some newmem , Some newstack -> Some (newip  , newmem , newstack)
 
 
 
-let step ((pc, mem, stack) as state) instr : state option =
+let step ((ip, mem, stack) as state) instr : state option =
     match instr, stack with
 
     | Add, l::r::tl                            -> substitute ~stack:(l+r::tl) state
@@ -122,7 +114,7 @@ let step ((pc, mem, stack) as state) instr : state option =
     | Eq, l::r::tl when l=r                    -> substitute ~stack:(1l::tl) state
     | Eq, l::r::tl                             -> substitute ~stack:(0l::tl) state
 
-    | JmpIf, cond::addr::tl when cond!=0l      -> substitute ~pc:addr ~stack:(tl) state
+    | JmpIf, cond::addr::tl when cond!=0l      -> substitute ~ip:addr ~stack:(tl) state
     | JmpIf, cond::addr::tl                    -> substitute          ~stack:(tl) state
 
     | Not, hd::tl when hd=0l                   -> substitute ~stack:(1l::tl) state
@@ -132,31 +124,34 @@ let step ((pc, mem, stack) as state) instr : state option =
 
     | Pop, a::tl                               -> substitute ~stack:(tl) state
 
-    | Print, stack                             -> print_stack stack; substitute state
+    | Trace, stack                             -> print_state state; substitute state
 
     | Push a, stack                            -> substitute ~stack:(a::stack) state
 
-    | Read, _                                  -> None
-
     | Store, addr::value::tl                   -> substitute ~mem:(wr addr value mem) ~stack:(tl) state
-    | Load,  addr::tl                          -> print_mem mem; substitute           ~stack:((ld addr mem)::tl) state
+    | Load,  addr::tl                          -> print_mem mem
+                                                ; substitute ~stack:((ld addr mem)::tl) state
 
     | Swap, l::r::tl                           -> substitute ~stack:(r::l::tl) state
+
+    (* Not implemented *)
+    | Show, _ | Read, _                        -> None
 
     (* Illegal instruction-stack pair *)
     | _, _                                     -> None
 
 
-let rec run prg ((pc, mem, stack) as state) : stack option =
-    if pc > maxpc then None else
-    match List.nth_opt prg @@ Int32.to_int pc with
+let rec run prg ((ip, mem, stack) as state) : stack option =
+    print_ip ip;
+    (* if ip > maxpc then None else *)
+    match List.nth_opt prg @@ Int32.to_int ip with
     | Some Done  -> Some stack
     | Some instr -> step state instr >>= run prg
     | None       -> print_endline
-                 @@ "Error: Non instruction at" ^ Int32.to_string pc
+                 @@ "Error: Non instruction at" ^ Int32.to_string ip
                  ; None
 
-let print_res title prg state = 
+let print_res title prg state =
         print_endline "";
         print_endline "-R -E -S -E -T-";
         print_endline "";
@@ -166,29 +161,117 @@ let print_res title prg state =
         | None       -> print_endline "An error occured."
 
 (* example program *)
-(* let addTwoNumbers = [Read; Read; Add; Print; Done] *)
-let addTwoNumbers = [Add; Print; Done]
+(* let addTwoNumbers = [Read; Read; Add; Trace; Done] *)
+let addTwoNumbers = [Add; Trace; Done]
 let pushAdd = [Push 5l; Push 29l; Add; Done]
 let storeLoadAddPrint = [ Push 4l
                         ; Push 2l
                         ; Push 3l
                         ; Push 1l
-                        ; Print
+                        ; Trace
                         ; Store
                         ; Store
-                        ; Print
                         ; Push 1l
                         ; Load
-                        ; Print
                         ; Push 2l
                         ; Load
-                        ; Print
+                        ; Trace
                         ; Add
                         ; Done]
 
+let prgLoop = [Push 0l; Push 1l; Trace; JmpIf; Trace]
+
 (*
-*)
 let () = print_res "addTwoNumbers" addTwoNumbers (0l, Store.empty, [3l;5l])
 let () = print_res "pushAdd" pushAdd init_state
+let () = print_res "prgLoop" prgLoop init_state (*infinite loop*)
 let () = print_res "storeLoadAddPrint" storeLoadAddPrint init_state
+*)
+
+
+
+type symword =
+    | SAdd of symword * symword
+    | SEq  of symword * symword
+    | SNot of symword
+    | SOr  of symword * symword
+    | SCon of word
+    | SAnd of symword * symword
+    | SLt  of symword * symword
+    | SAny of word (* Beal uses Int *)
+
+
+(* key : int32 -> value : symword *)
+module Store  = Map.Make(Int32)
+
+type ip       = word
+type next     = word
+type symmem   = symword Store.t
+type symstack = symword list
+type pc       = symword list
+type symstate = ip * next * symmem * symstack * pc
+type 'a tree  = Empty | Node of 'a * 'a tree list
+
+
+let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list =
+(*    let newip, newsymmem, newstack as nextstate = substitute (ip, symmem,
+ *    symstack) in *)
+    match instr, symstack with
+
+    | Add, l::r::tl                            -> [(ip+1l, next+1l, symmem, SAdd(l, r)::tl, pc)]
+
+
+    | JmpIf, cond::SCon addr::tl                    -> [(ip+1l, next, symmem, symstack, SNot cond::pc); (* false branch *)
+                                                        (addr,  next, symmem, symstack,      cond::pc)] (* true branch *)
+
+    | JmpIf, _::_::tl                          -> [(ip+1l, next, symmem, symstack, pc)] (* false branch *)
+(*
+    | Dup, hd::tl                              -> [substitute ~stack:(hd::hd::tl) state]
+
+    | Eq, l::r::tl when l=r                    -> [substitute ~stack:(1l::tl) state]
+    | Eq, l::r::tl                             -> [substitute ~stack:(0l::tl) state]
+
+    | Not, hd::tl when hd=0l                   -> [substitute ~stack:(1l::tl) state]
+    | Not, hd::tl                              -> [substitute ~stack:(0l::tl) state]
+
+    | Over, a::b::c::tl                        -> [substitute ~stack:(a::b::c::a::tl) state]
+
+    | Pop, a::tl                               -> [substitute ~stack:(tl) state]
+
+    | Trace, stack                             -> print_state state; [substitute state]
+
+    | Push a, stack                            -> [substitute ~stack:(a::stack) state]
+
+    | Store, addr::value::tl                   -> [substitute ~mem:(wr addr value mem) ~stack:(tl) state]
+    | Load,  addr::tl                          -> print_mem symmem
+                                                ; [substitute ~stack:((ld addr mem)::tl) state]
+
+    | Swap, l::r::tl                           -> [substitute ~stack:(r::l::tl) state]
+    *)
+
+    (* Not implemented *)
+    | Show, _ | Read, _                        -> []
+
+    (* Illegal instruction-stack pair *)
+    | _, _                                     -> []
+
+
+
+let rec symRun maxDepth prg ((ip, next, symmem, symstack, pc) as symstate) : symstate tree =
+    print_ip ip;
+    (* if ip > maxpc then None else *)
+    match List.nth_opt prg @@ Int32.to_int ip with
+    | Some Done  -> Node (symstate, [])
+    | Some instr -> if maxDepth > 0 then
+                        let childStates = symStep symstate instr in
+                        let children = List.map (symRun (maxDepth-1) prg) childStates in
+                        Node (symstate, children)
+                    else
+                        Node (symstate, [])
+
+    | None       -> print_endline
+                 @@ "Error: Non instruction at" ^ Int32.to_string ip
+                 ; Empty
+
+
 
