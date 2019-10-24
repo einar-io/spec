@@ -157,7 +157,7 @@ let print_res title prg state =
         match run prg state with
         | Some stack -> print_stack stack
         | None       -> print_endline "An error occured."
-        B
+
 
 (* example program *)
 (* let addTwoNumbers = [Read; Read; Add; Trace; Done] *)
@@ -211,6 +211,33 @@ type pc       = symword list
 type symstate = ip * next * symmem * symstack * pc
 type 'a tree  = Empty | Node of 'a * 'a tree list
 
+
+
+
+let rec draw_tree ?(indent = 0l) (tree : symstate tree) =
+    let indentation = String.make (Int32.to_int indent) ' ' in
+    let print_indented st = print_endline @@ indentation ^ st in
+    match tree with
+    | Empty        -> print_endline "Symstate tree is Empty."
+    | Node (s, ss) -> let (ip, next, symmem, symstack, pc) = s in
+                      print_indented @@ "IP: " ^ Int32.to_string ip;
+                      print_indented @@ "Next: " ^ Int32.to_string next;
+                      print_indented @@ "|";
+                      print_indented @@ "`-";
+                      List.iter (draw_tree ~indent:(indent+1l)) ss
+                      (*
+                      print_endline @@ "SymMemory: " ^ symmem;
+                      print_endline @@ "SymStack: " ^ symstack;
+                      print_endline @@ "Path Constraints: " ^ pc
+                      *)
+                      (* print_endline @@ "Solved Values" ^ ""*)
+
+
+
+
+
+
+
 let ld addr mem =
     match Store.find_opt addr mem with
     | Some value -> value
@@ -256,9 +283,8 @@ let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list
 
     | Store, SCon addr::value::tl -> [(ip+1l, next, (wr addr value symmem), tl, pc)]
     | Store,             _::_::tl -> [(ip+1l, next, symmem, tl, pc)]
-    (* print_mem symmem *) 
+    (* print_mem symmem *)
     | Load, SCon addr::tl         -> [(ip+1l, next, symmem, (ld addr symmem)::tl, pc)]
-    
 
     | Swap, l::r::tl              -> [(ip+1l, next, symmem, r::l::tl, pc)]
 
@@ -277,9 +303,9 @@ let rec symRun maxDepth prg ((ip, next, symmem, symstack, pc) as symstate) : sym
     (* if ip > maxpc then None else *)
     match List.nth_opt prg @@ Int32.to_int ip with
     | Some Done  -> Node (symstate, [])
-    | Some instr -> if maxDepth > 0 then
+    | Some instr -> if maxDepth > 0l then
                         let childStates = symStep symstate instr in
-                        let children = List.map (symRun (maxDepth-1) prg) childStates in
+                        let children = List.map (symRun (maxDepth + -1l) prg) childStates in
                         Node (symstate, children)
                     else
                         Node (symstate, [])
@@ -293,32 +319,15 @@ let rec symRun maxDepth prg ((ip, next, symmem, symstack, pc) as symstate) : sym
 
 
 
-let print_symstate_tree (tree : symstate tree) =
-    match tree with
-    | Empty     -> print_endline "Symstate tree is Empty."
-    | Node (s, ss) -> let (ip, next, symmem, symstack, pc) = s in
-                      print_endline @@ "IP: " ^ Int32.to_string ip;
-                      print_endline @@ "Next: " ^ Int32.to_string next
-                      (*
-                      print_endline @@ "SymMemory: " ^ symmem;
-                      print_endline @@ "SymStack: " ^ symstack;
-                      print_endline @@ "Path Constraints: " ^ pc
-                      *)
-                      (* print_endline @@ "Solved Values" ^ ""*)
-
-
-
-
-
 let print_sym_res title prg state =
         print_endline "";
         print_endline "-R -E -S -E -T-";
         print_endline "";
         print_endline title;
-        let maxDepth = 16 in
+        let maxDepth = 16l in
         match symRun maxDepth prg state with
         | Empty     -> print_endline "Symstate tree is Empty."
-        | tree      -> print_symstate_tree tree
+        | tree      -> draw_tree tree
 
 
 let init_symstate : symstate = (0l, 0l, Store.empty, [], [])
