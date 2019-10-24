@@ -123,16 +123,14 @@ let step ((ip, mem, stack) as state) instr : state option =
     | Over, a::b::c::tl                        -> substitute ~stack:(a::b::c::a::tl) state
 
     | Pop, a::tl                               -> substitute ~stack:(tl) state
-
-    | Trace, stack                             -> print_state state; substitute state
-
     | Push a, stack                            -> substitute ~stack:(a::stack) state
 
     | Store, addr::value::tl                   -> substitute ~mem:(wr addr value mem) ~stack:(tl) state
-    | Load,  addr::tl                          -> print_mem mem
-                                                ; substitute ~stack:((ld addr mem)::tl) state
+    | Load,  addr::tl                          -> print_mem mem; substitute ~stack:((ld addr mem)::tl) state
 
     | Swap, l::r::tl                           -> substitute ~stack:(r::l::tl) state
+
+    | Trace, stack                             -> print_state state; substitute state
 
     (* Not implemented *)
     | Show, _ | Read, _                        -> None
@@ -159,6 +157,7 @@ let print_res title prg state =
         match run prg state with
         | Some stack -> print_stack stack
         | None       -> print_endline "An error occured."
+        B
 
 (* example program *)
 (* let addTwoNumbers = [Read; Read; Add; Trace; Done] *)
@@ -212,48 +211,64 @@ type pc       = symword list
 type symstate = ip * next * symmem * symstack * pc
 type 'a tree  = Empty | Node of 'a * 'a tree list
 
+let ld addr mem =
+    match Store.find_opt addr mem with
+    | Some value -> value
+    | None       -> SCon 0l
+
+(* Symbolic.hs/renderSym *)
+let rec render_sym (s : symword) : string =
+    match s with
+    | SAdd (s, t)  -> "(" ^ render_sym s ^ " + " ^ render_sym t ^ ")"
+    | SEq  (s, t)  -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
+    | SAnd (s, t)  -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
+    | SOr  (s, t)  -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
+    | SLt  (s, t)  -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
+    | SNot c       -> "~(" ^ render_sym c ^ ")"
+    | SCon w       -> Int32.to_string w
+    | SAny v       -> Int32.to_string v
+
+
 
 let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list =
-(*    let newip, newsymmem, newstack as nextstate = substitute (ip, symmem,
- *    symstack) in *)
     match instr, symstack with
 
-    | Add, l::r::tl                            -> [(ip+1l, next+1l, symmem, SAdd(l, r)::tl, pc)]
+    | Add, l::r::tl               -> [(ip+1l, next+1l, symmem, SAdd(l, r)::tl, pc)]
 
 
-    | JmpIf, cond::SCon addr::tl                    -> [(ip+1l, next, symmem, symstack, SNot cond::pc); (* false branch *)
-                                                        (addr,  next, symmem, symstack,      cond::pc)] (* true branch *)
+    | JmpIf, cond::SCon addr::tl  -> [(ip+1l, next, symmem, symstack, SNot cond::pc); (* false branch *)
+                                      (addr,  next, symmem, symstack,      cond::pc)] (* true branch *)
 
-    | JmpIf, _::_::tl                          -> [(ip+1l, next, symmem, symstack, pc)] (* false branch *)
-(*
-    | Dup, hd::tl                              -> [substitute ~stack:(hd::hd::tl) state]
+    | JmpIf, _::_::tl             -> [(ip+1l, next, symmem, symstack, pc)] (* false branch *)
 
-    | Eq, l::r::tl when l=r                    -> [substitute ~stack:(1l::tl) state]
-    | Eq, l::r::tl                             -> [substitute ~stack:(0l::tl) state]
+    | Dup, hd::tl                 -> [(ip+1l, next, symmem, hd::hd::tl, pc)]
 
-    | Not, hd::tl when hd=0l                   -> [substitute ~stack:(1l::tl) state]
-    | Not, hd::tl                              -> [substitute ~stack:(0l::tl) state]
+    | Eq, l::r::tl when l=r       -> [(ip+1l, next, symmem, SCon 1l::tl, pc)]
+    | Eq, l::r::tl                -> [(ip+1l, next, symmem, SCon 0l::tl, pc)]
 
-    | Over, a::b::c::tl                        -> [substitute ~stack:(a::b::c::a::tl) state]
+    | Not, hd::tl when hd=SCon 0l -> [(ip+1l, next, symmem, SCon 1l::tl, pc)]
+    | Not, hd::tl                 -> [(ip+1l, next, symmem, SCon 0l::tl, pc)]
 
-    | Pop, a::tl                               -> [substitute ~stack:(tl) state]
+    | Over, a::b::c::tl           -> [(ip+1l, next, symmem, a::b::c::a::tl, pc)]
 
-    | Trace, stack                             -> print_state state; [substitute state]
+    | Pop, a::tl                  -> [(ip+1l, next, symmem, tl, pc)]
+    | Push a, stack               -> [(ip+1l, next, symmem, SCon a::stack, pc)]
 
-    | Push a, stack                            -> [substitute ~stack:(a::stack) state]
+    | Store, SCon addr::value::tl -> [(ip+1l, next, (wr addr value symmem), tl, pc)]
+    | Store,             _::_::tl -> [(ip+1l, next, symmem, tl, pc)]
+    (* print_mem symmem *) 
+    | Load, SCon addr::tl         -> [(ip+1l, next, symmem, (ld addr symmem)::tl, pc)]
+    
 
-    | Store, addr::value::tl                   -> [substitute ~mem:(wr addr value mem) ~stack:(tl) state]
-    | Load,  addr::tl                          -> print_mem symmem
-                                                ; [substitute ~stack:((ld addr mem)::tl) state]
+    | Swap, l::r::tl              -> [(ip+1l, next, symmem, r::l::tl, pc)]
 
-    | Swap, l::r::tl                           -> [substitute ~stack:(r::l::tl) state]
-    *)
+    | Trace, stack                -> (* print_state symstate;*) [(ip+1l, next, symmem, stack, pc)]
 
     (* Not implemented *)
-    | Show, _ | Read, _                        -> []
+    | Show, _ | Read, _           -> []
 
     (* Illegal instruction-stack pair *)
-    | _, _                                     -> []
+    | _, _                        -> []
 
 
 
@@ -272,6 +287,46 @@ let rec symRun maxDepth prg ((ip, next, symmem, symstack, pc) as symstate) : sym
     | None       -> print_endline
                  @@ "Error: Non instruction at" ^ Int32.to_string ip
                  ; Empty
+
+
+
+
+
+
+let print_symstate_tree (tree : symstate tree) =
+    match tree with
+    | Empty     -> print_endline "Symstate tree is Empty."
+    | Node (s, ss) -> let (ip, next, symmem, symstack, pc) = s in
+                      print_endline @@ "IP: " ^ Int32.to_string ip;
+                      print_endline @@ "Next: " ^ Int32.to_string next
+                      (*
+                      print_endline @@ "SymMemory: " ^ symmem;
+                      print_endline @@ "SymStack: " ^ symstack;
+                      print_endline @@ "Path Constraints: " ^ pc
+                      *)
+                      (* print_endline @@ "Solved Values" ^ ""*)
+
+
+
+
+
+let print_sym_res title prg state =
+        print_endline "";
+        print_endline "-R -E -S -E -T-";
+        print_endline "";
+        print_endline title;
+        let maxDepth = 16 in
+        match symRun maxDepth prg state with
+        | Empty     -> print_endline "Symstate tree is Empty."
+        | tree      -> print_symstate_tree tree
+
+
+let init_symstate : symstate = (0l, 0l, Store.empty, [], [])
+
+let () = print_sym_res "addTwoNumbers" addTwoNumbers (0l, 0l, Store.empty, [SCon 3l; SCon 5l], [])
+let () = print_sym_res "pushAdd" pushAdd init_symstate
+(* let () = print_sym_res "prgLoop" prgLoop init_symstate (*infinite loop*) *)
+let () = print_sym_res "storeLoadAddPrint" storeLoadAddPrint init_symstate
 
 
 
