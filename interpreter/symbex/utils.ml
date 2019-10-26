@@ -10,7 +10,7 @@ let (+) a b = Int32.add a b
 (* replace with Module Option.Monad_infix
  * https://ocaml.janestreet.com/ocaml-core/latest/doc/base/Base/Option/Monad_infix/index.html
  * *)
-let (>>=) = bind (* Batteries.Option.bind *)
+(* let (>>=) = bind (* Batteries.Option.bind *) *)
 
 
 (* Symbolic.hs/renderSym *)
@@ -26,6 +26,17 @@ let rec render_sym (s : symword) : string =
     | SAny v       -> Int32.to_string v
 
 
+let print_symstack stackold =
+    let rec print_elems stack =
+        match stack with
+        | hd::[] -> render_sym hd
+        | hd::tl -> render_sym hd ^ "|" ^ print_elems tl
+        | []     -> "<empty>"
+    in
+    let stack = List.rev stackold in
+    (* print_endline @@ "SymStack: [" ^  print_elems stack ^  "]" *)
+    "[" ^ print_elems stack ^  "]"
+
 
 
 let rec draw_tree ?(indent = 0l) (tree : symstate tree) =
@@ -36,15 +47,15 @@ let rec draw_tree ?(indent = 0l) (tree : symstate tree) =
     | Node (s, ss) -> let (ip, next, symmem, symstack, pc) = s in
                       print_indented @@ "IP: " ^ Int32.to_string ip;
                       print_indented @@ "Next: " ^ Int32.to_string next;
+                      print_indented @@ "SymStack: " ^ print_symstack symstack;
+                      (*
+                      print_indented @@ "SymMemory: " ^ symmem;
+                      print_indented @@ "Path Constraints: " ^ pc
+                      *)
+                      (* print_indented @@ "Solved Values" ^ ""*)
                       print_indented @@ "|";
                       print_indented @@ "`-";
                       List.iter (draw_tree ~indent:(indent+1l)) ss
-                      (*
-                      print_endline @@ "SymMemory: " ^ symmem;
-                      print_endline @@ "SymStack: " ^ symstack;
-                      print_endline @@ "Path Constraints: " ^ pc
-                      *)
-                      (* print_endline @@ "Solved Values" ^ ""*)
 
 
 
@@ -54,6 +65,5 @@ let print_ip ip = print_endline @@ "IP: " ^ Int32.to_string ip
 
 let print_halt () =
         print_endline "";
-        print_endline "HALT";
-        print_endline "====";
+        print_endline "[HALT]";
         print_endline "";

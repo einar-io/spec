@@ -32,7 +32,6 @@ type instr =
     | Load
     | Done
 
-let maxpc = 16l
 let init_state : state = (0l, Store.empty, [])
 
 type symword =

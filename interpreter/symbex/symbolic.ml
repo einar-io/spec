@@ -1,5 +1,4 @@
-(* # require "batteries" *)
-open Batteries.Option
+open Base.Option.Monad_infix
 open String
 open List
 open Int32
@@ -9,7 +8,6 @@ open Utils
 
 
 let wr addr value mem = Store.add addr value mem
-
 
 let ld addr mem =
     match Store.find_opt addr mem with
@@ -22,11 +20,9 @@ let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list
 
     | Add, l::r::tl               -> [(ip+1l, next+1l, symmem, SAdd(l, r)::tl, pc)]
 
-
     | JmpIf, cond::SCon addr::tl  -> [(ip+1l, next, symmem, symstack, SNot cond::pc); (* false branch *)
                                       (addr,  next, symmem, symstack,      cond::pc)] (* true branch *)
-
-    | JmpIf, _::_::tl             -> [(ip+1l, next, symmem, symstack, pc)] (* false branch *)
+    | JmpIf, _::_::tl             -> [(ip+1l, next, symmem, symstack, pc)]            (* not SCon value *)
 
     | Dup, hd::tl                 -> [(ip+1l, next, symmem, hd::hd::tl, pc)]
 
@@ -43,12 +39,12 @@ let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list
 
     | Store, SCon addr::value::tl -> [(ip+1l, next, (wr addr value symmem), tl, pc)]
     | Store,             _::_::tl -> [(ip+1l, next, symmem, tl, pc)]
-    (* print_mem symmem *)
+    (* print_sym_mem symmem *)
     | Load, SCon addr::tl         -> [(ip+1l, next, symmem, (ld addr symmem)::tl, pc)]
 
     | Swap, l::r::tl              -> [(ip+1l, next, symmem, r::l::tl, pc)]
 
-    | Trace, stack                -> (* print_state symstate;*) [(ip+1l, next, symmem, stack, pc)]
+    | Trace, stack                -> (* print_sym_state symstate;*) [(ip+1l, next, symmem, stack, pc)]
 
     (* Not implemented *)
     | Show, _ | Read, _           -> []
@@ -58,8 +54,6 @@ let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list
 
 
 let rec symRun maxDepth prg ((ip, next, symmem, symstack, pc) as symstate) : symstate tree =
-    print_ip ip;
-    (* if ip > maxpc then None else *)
     match List.nth_opt prg @@ Int32.to_int ip with
     | Some Done  -> Node (symstate, [])
     | Some instr -> if maxDepth > 0l then
@@ -70,13 +64,13 @@ let rec symRun maxDepth prg ((ip, next, symmem, symstack, pc) as symstate) : sym
                         Node (symstate, [])
 
     | None       -> print_endline
-                 @@ "Error: Non instruction at" ^ Int32.to_string ip
-                 ; Empty
+                    @@ "Error: Non instruction at" ^ Int32.to_string ip;
+                    Empty
 
 
-let print_sym_res title prg state =
-        print_endline title;
-        let maxDepth = 16l in
+let print_sym_res ?(maxDepth = 16l) title prg state =
+        print_endline @@ "Running program: " ^ title;
         match symRun maxDepth prg state with
-        | Empty     -> print_endline "Symstate tree is Empty."
-        | tree      -> draw_tree tree; print_halt ();
+        | Empty     -> print_endline "Nothing to print: symstate tree is <Empty>."
+        | tree      -> draw_tree tree;
+                       print_halt ()
