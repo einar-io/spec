@@ -1,4 +1,4 @@
-(* key : int32 -> value : stack-type *)
+(* key : int32 -> (value : stack-elm-type) *)
 module Store = Map.Make(Int32)
 
 type word = int32
@@ -31,6 +31,7 @@ type instr =
     | Store
     | Load
     | Done
+    | HCF
 
 let init_state : state = (0l, Store.empty, [])
 

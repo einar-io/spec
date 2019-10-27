@@ -9,6 +9,7 @@ open Utils
 
 let wr addr value mem = Store.add addr value mem
 
+
 let ld addr mem =
     match Store.find_opt addr mem with
     | Some value -> value

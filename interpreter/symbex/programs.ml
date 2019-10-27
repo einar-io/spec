@@ -33,4 +33,5 @@ let storeLoadAddPrint = [ Push 4l
 let prgLoop = [Push 0l; Push 1l; Trace; JmpIf; Trace]
 
 
-let simpleSplit = []
+let prunablePrg= [Push 0l; Push 1l; JmpIf; JmpIf; Done; HCF]
+(* let prunablePrg= [Declare $d; Push 1l; JmpIf; JmpIf; Done; HCF] *)
