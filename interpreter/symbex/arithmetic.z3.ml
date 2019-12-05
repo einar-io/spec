@@ -1,10 +1,12 @@
 open Z3
+open Z3.Arithmetic
+(*
 open Z3.Goal
 open Z3.Expr
 open Z3.Solver
-open Z3.Arithmetic
-open Z3.Arithmetic.Integer
 open Z3.Log
+open Z3.Arithmetic.Integer
+*)
 
 (* Prove that `a < b, b < c, a > c` is not satisfiable in integers.
  * (but maybe is in bitvectors)
@@ -30,16 +32,16 @@ let transitivity ( ctx : context ) =
     let satisfiability = (Solver.check solver []) in
         (* Interpret results and print to user *)
     if satisfiability = SATISFIABLE
-    then 
-        ( print_endline "SAT:\n";
+    then ( 
+        print_endline "SAT:\n";
         (* We have found a satisfying assignment to that makes the law false *)
         let m_opt = Solver.get_model solver in
         match m_opt with
         | Some m -> print_endline @@ Model.to_string m
-        | None   -> print_endline @@ "<no model produced>")
+        | None   -> print_endline @@ "<no model produced>"
+    )
     else
         Printf.printf "UNSAT\n"
-
 
 
 let cyclic ( ctx : context ) =
@@ -90,8 +92,6 @@ let main () =
         then (Log.append "Exiting `main ()`";
               Log.close ())
         else ()
-
-
 
 
 let () = try Printf.printf "Entering main..\n"; main () with Error msg -> print_endline @@ "Z3 Exception thrown: " ^ msg

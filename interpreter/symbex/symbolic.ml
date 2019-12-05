@@ -17,6 +17,7 @@ let ld addr mem =
 
 
 let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list =
+    if not @@ SMT.satisfiable pc then [] else
     match instr, symstack with
 
     | Add, l::r::tl               -> [(ip+1l, next+1l, symmem, SAdd(l, r)::tl, pc)]
@@ -35,8 +36,8 @@ let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list
 
     | Over, a::b::c::tl           -> [(ip+1l, next, symmem, a::b::c::a::tl, pc)]
 
-    | Pop, a::tl                  -> [(ip+1l, next, symmem, tl, pc)]
-    | Push a, stack               -> [(ip+1l, next, symmem, SCon a::stack, pc)]
+    | Pop, hd::tl                 -> [(ip+1l, next, symmem, tl, pc)]
+    | Push hd, stack              -> [(ip+1l, next, symmem, SCon hd::stack, pc)]
 
     | Store, SCon addr::value::tl -> [(ip+1l, next, (wr addr value symmem), tl, pc)]
     | Store,             _::_::tl -> [(ip+1l, next, symmem, tl, pc)]
@@ -45,10 +46,12 @@ let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list
 
     | Swap, l::r::tl              -> [(ip+1l, next, symmem, r::l::tl, pc)]
 
-    | Trace, stack                -> (* print_sym_state symstate;*) [(ip+1l, next, symmem, stack, pc)]
+    | Trace, stack                -> print_symstate symstate; [(ip+1l, next, symmem, stack, pc)]
 
     (* Not implemented *)
     | Show, _ | Read, _           -> []
+
+    | Declare sv, _                -> [(ip+1l, next+1l, symmem, SAny next::symstack, pc)]
 
     (* Illegal instruction-stack pair *)
     | _, _                        -> []
@@ -62,14 +65,15 @@ let rec symRun maxDepth prg ((ip, next, symmem, symstack, pc) as symstate) : sym
                         let children = List.map (symRun (maxDepth + -1l) prg) childStates in
                         Node (symstate, children)
                     else
-                        Node (symstate, [])
+                        (print_endline @@ "Killed program after reaching `maxDepth`.";
+                        Node (symstate, []))
 
     | None       -> print_endline
                     @@ "Error: Non instruction at" ^ Int32.to_string ip;
                     Empty
 
 
-let print_sym_res ?(maxDepth = 16l) title prg state =
+let print_sym_res ?(maxDepth = 8l) title prg state =
         print_endline @@ "Running program: " ^ title;
         match symRun maxDepth prg state with
         | Empty     -> print_endline "Nothing to print: symstate tree is <Empty>."

@@ -7,6 +7,7 @@ open Types
  * https://stackoverflow.com/a/53131220 *)
 let (+) a b = Int32.add a b
 
+
 (* Symbolic.hs/renderSym *)
 let rec render_sym (s : symword) : string =
     match s with
@@ -16,11 +17,14 @@ let rec render_sym (s : symword) : string =
     | SOr  (s, t)  -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
     | SLt  (s, t)  -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
     | SNot c       -> "~(" ^ render_sym c ^ ")"
-    | SCon w       -> Int32.to_string w
-    | SAny v       -> "val_" ^ Int32.to_string v
+    | SCon w       -> "(SCon " ^ Int32.to_string w ^ ")"
+    | SAny v       -> "$var_" ^ Int32.to_string v (* Base.Char.to_string v *)
 
 
 let print_ip ip = print_endline @@ "IP: " ^ Int32.to_string ip
+
+
+let print_next next = print_endline @@ "Next: " ^ Int32.to_string next
 
 
 let print_symstack stackold =
@@ -28,7 +32,7 @@ let print_symstack stackold =
         match stack with
         | hd::[] -> render_sym hd
         | hd::tl -> render_sym hd ^ "|" ^ print_elems tl
-        | []     -> "<empty>"
+        | []     -> "<Empty>"
     in
     let stack = List.rev stackold in
     "[" ^ print_elems stack ^  "]"
@@ -39,14 +43,26 @@ let print_symmem_entry key value : string =
 
 
 let print_symmem symmem =
+    if Store.is_empty symmem then "<Empty>" else
     Store.fold (fun k v a -> print_symmem_entry k v ^ a) symmem ""
 
 
 let print_pc pc =
+    if pc == [] then "Trivial" else
     List.fold_left (fun y x -> x ^ "; " ^ y) "" (List.map render_sym pc)
 
-let print_solved_values sv = ""
 
+let print_solved_values sv = "Not implemented."
+
+
+let print_symstate (ip, next, symmem, symstack, pc) =
+    print_endline "-------- TRACE ---------";
+    print_ip ip;
+    print_next next;
+    print_endline @@ "SymStack: " ^ print_symstack symstack;
+    print_endline @@ "SymMem:" ^ print_symmem symmem;
+    print_pc pc;
+    print_endline "--------  END  ---------"
 
 let rec draw_tree ?(indent = 0l) (tree : symstate tree) =
     let indentation = String.make (Int32.to_int indent) ' ' in

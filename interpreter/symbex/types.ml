@@ -32,6 +32,7 @@ type instr =
     | Load
     | Done
     | HCF
+    | Declare of word
 
 let init_state : state = (0l, Store.empty, [])
 
@@ -43,7 +44,7 @@ type symword =
     | SCon of word
     | SAnd of symword * symword
     | SLt  of symword * symword
-    | SAny of word (* Beal uses Int *)
+    | SAny of word
 
 
 
