@@ -20,7 +20,9 @@ let transitivity ( ctx : context ) =
     let b = BitVector.mk_const_s ctx "b" vector_length in
     let c = BitVector.mk_const_s ctx "c" vector_length in
 
-    let sts = [mk_slt ctx a b; mk_slt ctx b c; mk_slt ctx a c] in
+    let sts = [mk_slt ctx a b;
+               mk_slt ctx b c;
+               mk_slt ctx a c] in
 
     (* (assert (sts)) *)
     let g = (Goal.mk_goal ctx true false false) in
@@ -53,7 +55,43 @@ let cyclic ( ctx : context ) =
     let b = BitVector.mk_const_s ctx "b" vector_length in
     let c = BitVector.mk_const_s ctx "c" vector_length in
 
-    let sts = [mk_slt ctx a b; mk_slt ctx b c; mk_sgt ctx a c] in
+    let sts = [mk_slt ctx a b;
+               mk_slt ctx b c;
+               mk_sgt ctx a c] in
+
+    (* (assert (sts)) *)
+    let g = (Goal.mk_goal ctx true false false) in
+    Goal.add g sts;
+
+    let solver = (Solver.mk_solver ctx None) in
+
+    (List.iter (fun a -> (Solver.add solver [ a ])) (Goal.get_formulas g)) ;
+
+    (* (check-sat) *)
+    let satisfiability = (Solver.check solver []) in
+        (* Interpret results and print to user *)
+    if satisfiability = SATISFIABLE then
+        (* We have found a satisfying assignment to that makes the law false *)
+        let m_opt = Solver.get_model solver in
+        Printf.printf "SAT:\n";
+        match m_opt with
+        | Some m -> print_endline @@ Model.to_string m
+        | None   -> print_endline @@ "<no model produced>"
+    else
+        Printf.printf "UNSAT\n"
+
+
+let overflow ( ctx : context ) =
+
+    (* (declare-const x Int) *)
+    let a = BitVector.mk_const_s ctx "a" vector_length in
+    let b = BitVector.mk_const_s ctx "b" vector_length in
+    let z = BitVector.mk_numeral ctx "0" vector_length in
+
+    (* 0 < a, 0 < b, a + b < 0 *)
+    let sts = [mk_slt ctx z a;
+               mk_slt ctx z b;
+               mk_sge ctx z (mk_add ctx a b)] in
 
     (* (assert (sts)) *)
     let g = (Goal.mk_goal ctx true false false) in
@@ -87,8 +125,9 @@ let main () =
     let cfg = [("model", "true"); ("proof", "false")] in
     let ctx = (Z3.mk_context cfg) in
 
-    let t = transitivity ctx in
-    let c = cyclic ctx in
+    let _ = transitivity ctx in
+    let _ = cyclic ctx in
+    let _ = overflow ctx in
 
     if with_log 
         then (Log.append "Exiting `main ()`";
@@ -96,4 +135,4 @@ let main () =
         else ()
 
 
-let () = try Printf.printf "Entering main..\n"; main () with Error msg -> print_endline @@ "Z3 Exception thrown: " ^ msg
+let () = try Printf.printf "Test: BitVector\n"; main () with Error msg -> print_endline @@ "Z3 Exception thrown: " ^ msg
