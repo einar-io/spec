@@ -1,11 +1,16 @@
 (*# require "batteries" *)
-open Batteries.Option
+(* operators cannot be overloaded
+ * https://stackoverflow.com/a/53131220 *)
+(* open Batteries.Option *)
+let (+) a b = Int32.add a b
+
+module I32 = struct
+    open Int32
+    let (+), (-) = add, sub
+end
 
 open Types
 
-(* operators cannot be overloaded
- * https://stackoverflow.com/a/53131220 *)
-let (+) a b = Int32.add a b
 
 
 (* Symbolic.hs/renderSym *)
@@ -76,9 +81,10 @@ let rec draw_tree ?(indent = 0l) (tree : symstate tree) =
                       print_indented @@ "SymStack: " ^ print_symstack symstack;
                       print_indented @@ "Path Constraints: " ^ print_pc pc;
                       print_indented @@ "Solved Values: " ^ print_solved_values "";
+                      print_indented @@ "Indentation level: " ^ Int32.to_string indent;
                       print_indented @@ "|";
                       print_indented @@ "`-";
-                      List.iter (draw_tree ~indent:(indent+1l)) ss
+                      List.iter (draw_tree ~indent:(I32.(indent+1l))) ss
 
 
 let print_halt () =

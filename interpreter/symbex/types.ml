@@ -2,6 +2,7 @@
 module Store = Map.Make(Int32)
 
 type word = int32
+let wordsize = 32
 
 type conip = word
 (* key : int32 -> value : int32 *)
@@ -46,7 +47,12 @@ type symword =
     | SLt  of symword * symword
     | SAny of word
 
+module Symword = struct
+    type t = symword
+    let compare = compare
+end
 
+module Symwords = Set.Make(Symword)
 
 type ip       = word
 type next     = word
