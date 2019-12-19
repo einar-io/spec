@@ -14,8 +14,8 @@ open Types
 (* Our Set *)
 module S = Types.Symwords
 
-let build_constraint_tree _ = []
 
+(* Create the set of unassigned variables *)
 let rec gather_free pc =
     match pc with
     | SNot a        -> gather_free a
@@ -28,17 +28,48 @@ let rec gather_free pc =
     | SLt  (a, b)   -> S.union (gather_free a) (gather_free b)
 
 
-let rec sym_to_smt ctx apc =
-    let s2s = sym_to_smt ctx in
-    match apc with
-    | SNot a   -> mk_not ctx (s2s a)
-    | SAny a   -> mk_const ctx (Z3.Symbol.mk_int ctx @@ Int32.to_int a) wordsize
+(* in: [SAny 1; SAny 2; .. SAny N]
+ * out: [(1, SAny 1); (2, SAny 2); .. (N, SAny N)]
+ *)
+let createSym ctx pcs =
+    let create_pair free_var =
+    match free_var with
+    | (SAny i) ->
+        let expr_id = Symbol.mk_int ctx (Int32.to_int i) in
+        let z3_expr = BitVector.mk_const ctx expr_id wordsize in
+        (i, z3_expr)
+    | _   -> raise @@ Error "Wrong constructor"
+    in List.map create_pair pcs
+
+
+let combine_assertions pcs =
+    List.fold_left (fun x y -> SAnd (x, y)) (SCon 1l) pcs
+
+
+let rec tree_mapper ctx symMap pc =
+    let s2s = tree_mapper ctx symMap in
+    match pc with
+    | SNot a      -> mk_not ctx (s2s a)
+    | SAny a      -> List.find (fun (i, _) -> i = a) symMap |> snd
     | SAdd (a, b) -> mk_add ctx (s2s a) (s2s b)
     | SEq  (a, b) -> Z3.Boolean.mk_eq ctx (s2s a) (s2s b)
     | SOr  (a, b) -> mk_or ctx (s2s a) (s2s b)
-    | SCon a  -> mk_const ctx (Z3.Symbol.mk_int ctx @@ Int32.to_int a) wordsize
+    | SCon a      -> BitVector.mk_numeral ctx (Int32.to_string a) wordsize
     | SAnd (a, b) -> mk_and ctx (s2s a) (s2s b)
     | SLt  (a, b) -> mk_slt ctx (s2s a) (s2s b)
+
+
+let sym_to_smt ctx symMap pcs =
+    List.map (tree_mapper ctx symMap) pcs
+
+
+let toSMT ctx pcs =
+    let combined_pc = combine_assertions pcs in
+    let set_of_free_vars = gather_free combined_pc in
+    let list_of_free_vars = S.elements set_of_free_vars in
+    let symMap = createSym ctx list_of_free_vars in
+    let z3pcs = sym_to_smt ctx symMap pcs in
+    z3pcs
 
 
 let check_pc pc =
@@ -72,7 +103,8 @@ let check_pc pc =
     *)
     (* PART2: construct list with above assertions *)
     (* let assertions = sym_to_smt ctx pc in *)
-    let assertions = List.map (sym_to_smt ctx) pc in
+    let assertions = toSMT ctx pc in
+    (* let assertions = List.map (sym_to_smt ctx) pc in *)
 
     (* goal (context &c, bool models=true, bool unsat_cores=false, bool proofs=false) 
      * https://z3prover.github.io/api/html/classz3_1_1goal.html *)

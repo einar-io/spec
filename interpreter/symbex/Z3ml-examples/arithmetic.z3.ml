@@ -79,7 +79,7 @@ let main () =
     let with_log = Log.open_ "Z3.log" in
 
     if with_log
-        then Log.append "Entering `main ()`"
+        then Log.append "Arithmetic test:\n"
         else ();
 
     let cfg = [("model", "true"); ("proof", "false")] in
@@ -94,4 +94,4 @@ let main () =
         else ()
 
 
-let () = try Printf.printf "Entering main..\n"; main () with Error msg -> print_endline @@ "Z3 Exception thrown: " ^ msg
+let () = try Printf.printf "Test: arithmetic.z3.ml\n"; main () with Error msg -> print_endline @@ "Z3 Exception thrown: " ^ msg

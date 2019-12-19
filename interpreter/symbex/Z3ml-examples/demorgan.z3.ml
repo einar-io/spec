@@ -49,8 +49,8 @@ let prove_demorgan () =
             (* We have found a satisfying assignment to that makes the law false *)
             Printf.printf "De Morgan is invalid.\n"
         else
-            Printf.printf "De Morgan valid.\n"
+            Printf.printf "De Morgan is valid.\n"
 
 
-let () = Printf.printf "Starting main..\n"
+let () = Printf.printf "De Morgan test: "
 let () = try prove_demorgan () with Error msg -> print_endline @@ "Z3 Exception thrown: " ^ msg
