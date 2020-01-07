@@ -1,8 +1,3 @@
-open Base.Option.Monad_infix
-open String
-open List
-open Int32
-
 open Types
 open Utils
 
@@ -17,7 +12,11 @@ let ld addr mem =
 
 
 let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list =
-    if not @@ SMT.satisfiable pc then [] else
+
+    let step_possible = SMT.satisfiable pc in
+    (* print_endline @@ "Step is possible: " ^ string_of_bool step_possible; *)
+
+    if not step_possible then [] else
     match instr, symstack with
 
     | Add, l::r::tl               -> [(ip+1l, next+1l, symmem, SAdd(l, r)::tl, pc)]
@@ -60,13 +59,13 @@ let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list
 let rec symRun maxDepth prg ((ip, next, symmem, symstack, pc) as symstate) : symstate tree =
     match List.nth_opt prg @@ Int32.to_int ip with
     | Some Done  -> Node (symstate, [])
-    | Some instr -> if maxDepth > 0l then
+    | Some instr when maxDepth > 0l ->
                         let childStates = symStep symstate instr in
                         let children = List.map (symRun (maxDepth + -1l) prg) childStates in
                         Node (symstate, children)
-                    else
-                        (print_endline @@ "Killed program after reaching `maxDepth`.";
-                        Node (symstate, []))
+    | Some instr ->
+                        print_endline @@ "Killed program after reaching `maxDepth`.";
+                        Node (symstate, [])
 
     | None       -> print_endline
                     @@ "Error: Non instruction at" ^ Int32.to_string ip;

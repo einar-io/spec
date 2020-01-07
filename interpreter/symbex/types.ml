@@ -1,6 +1,8 @@
 (* key : int32 -> (value : stack-elm-type) *)
 module Store = Map.Make(Int32)
 
+module SMTmap = Map.Make(Int32)
+
 type word = int32
 let wordsize = 32
 

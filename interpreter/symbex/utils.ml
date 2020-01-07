@@ -52,9 +52,10 @@ let print_symmem symmem =
     Store.fold (fun k v a -> print_symmem_entry k v ^ a) symmem ""
 
 
-let print_pc pc =
-    if pc == [] then "Trivial" else
-    List.fold_left (fun y x -> x ^ "; " ^ y) "" (List.map render_sym pc)
+let print_pc = function
+    | [] -> "Trivial" 
+    | pc -> List.fold_left (fun y x -> x ^ "; " ^ y) "" (List.map render_sym pc)
+
 
 
 let print_solved_values sv = "Not implemented."
@@ -65,8 +66,8 @@ let print_symstate (ip, next, symmem, symstack, pc) =
     print_ip ip;
     print_next next;
     print_endline @@ "SymStack: " ^ print_symstack symstack;
-    print_endline @@ "SymMem:" ^ print_symmem symmem;
-    print_pc pc;
+    print_endline @@ "SymMem: " ^ print_symmem symmem;
+    print_endline @@ "Path Constraints: " ^ print_pc pc;
     print_endline "--------  END  ---------"
 
 let rec draw_tree ?(indent = 0l) (tree : symstate tree) =

@@ -7,7 +7,6 @@
 open Z3
 open Z3.Solver
 open Z3.BitVector
-(*open Z3.Boolean*)
 open Utils
 open Types
 
@@ -31,6 +30,9 @@ let rec gather_free pc =
 (* in: [SAny 1; SAny 2; .. SAny N]
  * out: [(1, SAny 1); (2, SAny 2); .. (N, SAny N)]
  *)
+    (* PART1: mk_const_s/mk_const_int *)
+    (* (declare-const x Int) *)
+    (*
 let createSym ctx pcs =
     let create_pair free_var =
     match free_var with
@@ -38,83 +40,104 @@ let createSym ctx pcs =
         let expr_id = Symbol.mk_int ctx (Int32.to_int i) in
         let z3_expr = BitVector.mk_const ctx expr_id wordsize in
         (i, z3_expr)
-    | _   -> raise @@ Error "Wrong constructor"
+    | _   -> raise @@ Error "Constructor was not SAny."
     in List.map create_pair pcs
+    *)
+
+let sym_to_z3 ctx = function
+    | (SAny i) ->
+        let expr_id = Symbol.mk_int ctx (Int32.to_int i) in
+        let z3_expr = BitVector.mk_const ctx expr_id wordsize in
+        (i, z3_expr)
+    | _   -> raise @@ Error "Constructor was not SAny."
 
 
 let combine_assertions pcs =
     List.fold_left (fun x y -> SAnd (x, y)) (SCon 1l) pcs
 
 
-let rec tree_mapper ctx symMap pc =
-    let s2s = tree_mapper ctx symMap in
+let rec tree_mapper ctx symvar_map pc =
+    let s2s = tree_mapper ctx symvar_map in
     match pc with
-    | SNot a      -> mk_not ctx (s2s a)
-    | SAny a      -> List.find (fun (i, _) -> i = a) symMap |> snd
-    | SAdd (a, b) -> mk_add ctx (s2s a) (s2s b)
-    | SEq  (a, b) -> Z3.Boolean.mk_eq ctx (s2s a) (s2s b)
-    | SOr  (a, b) -> mk_or ctx (s2s a) (s2s b)
+    | SNot a      -> BitVector.mk_not ctx (s2s a)
+  (*| SAny a      -> List.find (fun (i, _) -> i = a) symvar_map |> snd *)
+    | SAny a      -> SMTmap.find a symvar_map
+    | SAdd (a, b) -> BitVector.mk_add ctx (s2s a) (s2s b)
+    | SEq  (a, b) -> Boolean.mk_eq ctx (s2s a) (s2s b)
+    | SOr  (a, b) -> BitVector.mk_or ctx (s2s a) (s2s b)
     | SCon a      -> BitVector.mk_numeral ctx (Int32.to_string a) wordsize
-    | SAnd (a, b) -> mk_and ctx (s2s a) (s2s b)
-    | SLt  (a, b) -> mk_slt ctx (s2s a) (s2s b)
+    | SAnd (a, b) -> BitVector.mk_and ctx (s2s a) (s2s b)
+    | SLt  (a, b) -> BitVector.mk_slt ctx (s2s a) (s2s b)
 
 
-let sym_to_smt ctx symMap pcs =
-    List.map (tree_mapper ctx symMap) pcs
+let sym_to_smt ctx symvar_map pcs = List.map (tree_mapper ctx symvar_map) pcs
 
 
-let toSMT ctx pcs =
+let print_ith_assertion last_index (i : int) a =
+    let offset = last_index - 1 - i in
+    print_endline 
+        @@ "Assertion[" 
+        ^ string_of_int offset
+        ^ "]:"
+        ^ Expr.to_string a
+
+
+let to_assertions ctx pcs =
     let combined_pc = combine_assertions pcs in
     let set_of_free_vars = gather_free combined_pc in
     let list_of_free_vars = S.elements set_of_free_vars in
-    let symMap = createSym ctx list_of_free_vars in
-    let z3pcs = sym_to_smt ctx symMap pcs in
-    z3pcs
+    (* let symMap = createSym ctx list_of_free_vars in *)
+    let symvar_map = list_of_free_vars
+                    |> List.map (sym_to_z3 ctx)
+                    |> List.to_seq
+                    |> SMTmap.of_seq
+    in
+    let z3assertions = sym_to_smt ctx symvar_map pcs in
+    z3assertions
 
 
-let check_pc pc =
+let check_pc pcs =
     (* PART 0: Initialisation *)
-    print_endline @@ print_pc pc;
-    print_endline "Invoking `check_pc ()`.";
+    print_endline @@ print_pc pcs;
+    print_endline "---------------- Invoking `check_pc ()`.";
+    Z3.toggle_warning_messages true;
 
     let with_log = Z3.Log.open_ "Z3.log" in
-    if  with_log then Z3.Log.append "Entering `check_pc ()`" else ();
+    if  with_log then (
+        Z3.Log.append @@ "Running Z3 version: " ^ Version.to_string ^ "\n";
+        Z3.Log.append @@ "Z3 full version string: " ^ Version.full_version ^ "\n";
+        Z3.Log.append "Entering `check_pc ()`.."
+    ) else ();
 
-    Printf.printf "Running Z3 version %s\n" Version.to_string ;
-    Printf.printf "Z3 full version string: %s\n" Version.full_version ;
-
-    (* timeout (unsigned) default timeout (in milliseconds) used for solvers *)
     let cfg = [("model", "true" );
-               ("proof", "false")] in
+               ("proof", "false");
+            (* ("timeout", "10000"); (*10k miliseconds *) *)
+               ("trace", "true");
+               ("trace_file_name", "smt-trace.log");
+               ("unsat_core", "false");
+               ] in
     let ctx = (Z3.mk_context cfg)  in
 
-    (* PART1: mk_const_s/mk_const_int *)
-    (* (declare-const x Int) *)
-    (*
-    let a = BitVector.mk_const_s ctx "a" vector_length in
-    let b = BitVector.mk_const_s ctx "b" vector_length in
-    let c = BitVector.mk_const_s ctx "c" vector_length in
-    *)
-
-    (*
-    let sts = [mk_slt ctx a b;
-               mk_slt ctx b c;
-               mk_slt ctx a c] in
-    *)
     (* PART2: construct list with above assertions *)
-    (* let assertions = sym_to_smt ctx pc in *)
-    let assertions = toSMT ctx pc in
-    (* let assertions = List.map (sym_to_smt ctx) pc in *)
+    (* This should be a Z3.Expr.expr list *)
+    let assertions = to_assertions ctx pcs in
+    print_endline @@ "Assertions: ";
+    List.iteri (print_ith_assertion @@ List.length assertions) assertions;
+    (* List.iter (fun x -> print_endline @@ Expr.to_string x) assertions; *)
 
     (* goal (context &c, bool models=true, bool unsat_cores=false, bool proofs=false) 
      * https://z3prover.github.io/api/html/classz3_1_1goal.html *)
-    let g = (Goal.mk_goal ctx true false false) in
+    let g = Goal.mk_goal ctx true false false in
+    print_endline "DEBUG start";
     Goal.add g assertions;
-
+    print_endline "DEBUG stop";
+    print_endline @@ Goal.to_string g;
 
     let solver = Solver.mk_solver ctx None in
 
-    (List.iter (fun a -> (Solver.add solver [ a ])) (Goal.get_formulas g)) ;
+    print_endline "DEBUG start";
+    List.iter (fun a -> (Solver.add solver [ a ])) (Goal.get_formulas g);
+    print_endline "DEBUG stop";
 
     let status = Solver.check solver [] in
 
@@ -127,19 +150,18 @@ let check_pc pc =
               Log.close ())
         else ();
 
-
-
     match status with
     | SATISFIABLE   -> true
     | UNKNOWN       -> true
     | UNSATISFIABLE -> false
 
 
-let satisfiable pc =
-    print_endline @@ print_pc pc;
-    match pc with
-    | [] -> let s = true in print_endline @@ string_of_bool s; s
+let satisfiable = function
+    (* print_endline @@ print_pc pc; *)
+    (* match pc with *)
+    | [] -> let s = true in (* print_endline @@ string_of_bool s;*) s
     | pc -> try let s = check_pc pc in print_endline @@ string_of_bool s; s
-            with Error msg -> let emsg = "Z3/ML Exception thrown with message: " ^ msg in Error msg; true
+            with Error msg -> let emsg = "Z3 ML/OCaml exception thrown with message: "
+            ^ msg in print_endline emsg; false
 
 

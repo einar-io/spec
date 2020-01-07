@@ -1,6 +1,5 @@
-
 default: _tags *.ml
-	ocamlbuild -use-ocamlfind run.byte
+	export LD_LIBRARY_PATH=`opam config var z3:lib`; ocamlbuild -lflag -thread -use-ocamlfind run.byte
 	./run.byte
 
 interpreter:
@@ -19,3 +18,7 @@ demorgan: demorgan.ml
 .PHONY: interfaces
 interfaces: run.ml
 	corebuild run.inferred.mli
+
+.PHONY: clean
+clean:
+	ocamlbuild -clean
