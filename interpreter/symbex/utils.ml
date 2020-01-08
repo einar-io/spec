@@ -1,16 +1,13 @@
-(*# require "batteries" *)
-(* operators cannot be overloaded
- * https://stackoverflow.com/a/53131220 *)
-(* open Batteries.Option *)
+open Types
+
+
 let (+) a b = Int32.add a b
+
 
 module I32 = struct
     open Int32
     let (+), (-) = add, sub
 end
-
-open Types
-
 
 
 (* Symbolic.hs/renderSym *)
@@ -57,7 +54,6 @@ let print_pc = function
     | pc -> List.fold_left (fun y x -> x ^ "; " ^ y) "" (List.map render_sym pc)
 
 
-
 let print_solved_values sv = "Not implemented."
 
 
@@ -69,6 +65,7 @@ let print_symstate (ip, next, symmem, symstack, pc) =
     print_endline @@ "SymMem: " ^ print_symmem symmem;
     print_endline @@ "Path Constraints: " ^ print_pc pc;
     print_endline "--------  END  ---------"
+
 
 let rec draw_tree ?(indent = 0l) (tree : symstate tree) =
     let indentation = String.make (Int32.to_int indent) ' ' in
@@ -88,7 +85,9 @@ let rec draw_tree ?(indent = 0l) (tree : symstate tree) =
                       List.iter (draw_tree ~indent:(I32.(indent+1l))) ss
 
 
-let print_halt () =
-        print_endline "";
-        print_endline "[HALT]";
-        print_endline "";
+let print_halt () = Printf.printf "\n[HALT]\n"
+
+
+let print_ith_assertion last_index (i : int) a =
+    let offset = string_of_int @@ last_index - 1 - i in
+    Printf.printf "Assertion[%s]: %s\n" offset (Z3.Expr.to_string a)
