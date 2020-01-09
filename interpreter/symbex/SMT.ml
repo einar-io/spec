@@ -1,5 +1,4 @@
-(* open Z3 this shadows Set *)
-open Z3
+open Z3 (* shadows Set *)
 open Utils
 open Types
 
@@ -7,14 +6,14 @@ open Types
 (* Create the set of unassigned variables *)
 let rec gather_free pc =
     match pc with
-    | SNot a        -> gather_free a
-    | SAny a as elt -> Symset.singleton elt
-    | SAdd (a, b)   -> Symset.union (gather_free a) (gather_free b)
-    | SEq  (a, b)   -> Symset.union (gather_free a) (gather_free b)
-    | SOr  (a, b)   -> Symset.union (gather_free a) (gather_free b)
-    | SCon a        -> Symset.empty
-    | SAnd (a, b)   -> Symset.union (gather_free a) (gather_free b)
-    | SLt  (a, b)   -> Symset.union (gather_free a) (gather_free b)
+    | SNot a      -> gather_free a
+    | SCon a      -> Symset.empty
+    | SAny a as e -> Symset.singleton e
+    | SAdd (a, b) -> Symset.union (gather_free a) (gather_free b)
+    | SEq  (a, b) -> Symset.union (gather_free a) (gather_free b)
+    | SOr  (a, b) -> Symset.union (gather_free a) (gather_free b)
+    | SAnd (a, b) -> Symset.union (gather_free a) (gather_free b)
+    | SLt  (a, b) -> Symset.union (gather_free a) (gather_free b)
 
 
 let sym_to_z3 ctx = function
@@ -26,7 +25,8 @@ let sym_to_z3 ctx = function
 
 
 let combine_assertions pcs =
-    List.fold_left (fun x y -> SAnd (x, y)) (SCon 1l) pcs
+    let ne = (SCon 1l) in
+    List.fold_left (fun x y -> SAnd (x, y)) ne pcs
 
 
 let rec tree_mapper ctx symvar_map pc =
@@ -45,14 +45,27 @@ let rec tree_mapper ctx symvar_map pc =
 let sym_to_smt ctx symvar_map pcs = List.map (tree_mapper ctx symvar_map) pcs
 
 
-let is_not_zero_bv ctx bv =
-    Boolean.mk_not ctx @@ Boolean.mk_eq ctx bv @@ BitVector.mk_numeral ctx "0" wordsize
+let is_false ctx bv =
+    Boolean.mk_eq ctx bv @@ BitVector.mk_numeral ctx "0" wordsize
+
+
+let is_true ctx bv =
+    Boolean.mk_not ctx @@ is_false ctx bv
+
+
+let bv_mk_and ctx bv1 bv2 =
+    Boolean.mk_and ctx [is_true ctx bv1; is_true ctx bv2]
 
 
 let conjoin ctx pc =
     match pc with
     | [] -> BitVector.mk_numeral ctx "1" wordsize
-    | pc -> Boolean.mk_and ctx @@ List.map (is_not_zero_bv ctx) pc
+    | pc -> Boolean.mk_and ctx @@ List.map (is_true ctx) pc
+
+
+let conjoinfold ctx pc =
+    let ne = BitVector.mk_numeral ctx "1" wordsize in
+    List.fold_left (bv_mk_and ctx) ne pc
 
 
 let to_assertions ctx pcs =
@@ -106,11 +119,12 @@ let check_pc pcs =
 
     let solver = Solver.mk_solver ctx None in
 
-    List.iter (fun a -> (Solver.add solver [ a ])) (Goal.get_formulas g);
+    List.iter (fun a -> Solver.add solver [a]) (Goal.get_formulas g);
 
     let status = Solver.check solver [] in
 
-    let stmsg ="Returns: " ^ Solver.string_of_status status in
+    (* Logging and printing *)
+    let stmsg = "Returns: " ^ Solver.string_of_status status in
 
     print_endline stmsg; 
 
@@ -119,6 +133,7 @@ let check_pc pcs =
               Log.close ())
         else ();
 
+    (* Return *)
     match status with
     | SATISFIABLE   -> true
     | UNKNOWN       -> true
@@ -129,7 +144,8 @@ let satisfiable pc =
     match pc with
     | [] -> true (* No constraints *)
     | pc -> try check_pc pc
-            with Error msg -> let emsg = "Z3 ML/OCaml exception: "
-            ^ msg in print_endline emsg; false
+            with Error msg -> let emsg = "Z3 ML/OCaml exception: " ^ msg 
+                              in print_endline emsg;
+                              false
 
 

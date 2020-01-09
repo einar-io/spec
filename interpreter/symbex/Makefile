@@ -9,11 +9,14 @@ interpreter:
 z3:
 	utop -require "z3"
 
+.PHONY: z3-examples
+z3-examples: Z3ml-examples/*.ml
+	$(MAKE) --directory Z3ml-examples
+
+
 tags: *.ml
 	otags -r -vi
 
-demorgan: demorgan.ml
-	ocamlfind ocamlc -o demorgan.byte -package z3 -linkpkg demorgan.ml
 
 .PHONY: interfaces
 interfaces: run.ml
@@ -22,3 +25,7 @@ interfaces: run.ml
 .PHONY: clean
 clean:
 	ocamlbuild -clean
+
+
+demorgan: demorgan.ml
+	ocamlfind ocamlc -o demorgan.byte -package z3 -linkpkg demorgan.ml

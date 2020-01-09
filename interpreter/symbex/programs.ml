@@ -33,7 +33,7 @@ let storeLoadAddPrint = [ Push 4l
 let prgLoop = [Push 0l; Push 1l; Trace; JmpIf; Trace]
 
 
-let prunablePrgOld= [Push 0l; Push 1l; JmpIf; JmpIf; Done; HCF]
+let prunablePrgOld= [Push 0l; Push 1l; JmpIf; JmpIf; Done; Unreachable]
 
 
-let prunablePrg= [Push 0l; Declare 1l; JmpIf; JmpIf; Done; HCF]
+let prunablePrg= [Push 0l; Local 1l; JmpIf; JmpIf; Done; Unreachable]

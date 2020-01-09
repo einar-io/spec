@@ -13,14 +13,19 @@ end
 (* Symbolic.hs/renderSym *)
 let rec render_sym (s : symword) : string =
     match s with
-    | SAdd (s, t)  -> "(" ^ render_sym s ^ " + " ^ render_sym t ^ ")"
-    | SEq  (s, t)  -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
-    | SAnd (s, t)  -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
-    | SOr  (s, t)  -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
-    | SLt  (s, t)  -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
-    | SNot c       -> "~(" ^ render_sym c ^ ")"
-    | SCon w       -> "(SCon " ^ Int32.to_string w ^ ")"
-    | SAny v       -> "$var_" ^ Int32.to_string v (* Base.Char.to_string v *)
+    | SAdd (s, t) -> "(" ^ render_sym s ^ " + " ^ render_sym t ^ ")"
+    | SEq  (s, t) -> "(" ^ render_sym s ^ " = " ^ render_sym t ^ ")"
+    | SAnd (s, t) -> "(" ^ render_sym s ^ " && " ^ render_sym t ^ ")"
+    | SOr  (s, t) -> "(" ^ render_sym s ^ " || " ^ render_sym t ^ ")"
+    | SLt  (s, t) -> "(" ^ render_sym s ^ " < " ^ render_sym t ^ ")"
+    | SNot c      -> "~(" ^ render_sym c ^ ")"
+    | SCon w      -> "(i32.const " ^ Int32.to_string w ^ ")"
+    | SAny v      -> "(local $" ^ (v
+                                   |> (+) 97l
+                                   |> Int32.to_int
+                                   |> Char.chr
+                                   |> Char.escaped)
+                                   ^ ")"
 
 
 let print_ip ip = print_endline @@ "IP: " ^ Int32.to_string ip
@@ -50,7 +55,7 @@ let print_symmem symmem =
 
 
 let print_pc = function
-    | [] -> "Trivial" 
+    | [] -> "Trivial"
     | pc -> List.fold_left (fun y x -> x ^ "; " ^ y) "" (List.map render_sym pc)
 
 
@@ -78,8 +83,8 @@ let rec draw_tree ?(indent = 0l) (tree : symstate tree) =
                       print_indented @@ "SymMemory: " ^ print_symmem symmem;
                       print_indented @@ "SymStack: " ^ print_symstack symstack;
                       print_indented @@ "Path Constraints: " ^ print_pc pc;
-                      print_indented @@ "Solved Values: " ^ print_solved_values "";
-                      print_indented @@ "Indentation level: " ^ Int32.to_string indent;
+                      (* print_indented @@ "Solved Values: " ^ * print_solved_values ""; *)
+                      (* print_indented @@ "Indentation level: " ^ * Int32.to_string indent; *)
                       print_indented @@ "|";
                       print_indented @@ "`-";
                       List.iter (draw_tree ~indent:(I32.(indent+1l))) ss

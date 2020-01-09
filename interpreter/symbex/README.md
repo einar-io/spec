@@ -1,4 +1,20 @@
-### Technical issues
+Symbolic Executor
+=================
+
+
+Installation
+------------
+
+```bash
+apt-get install opam
+opam create switch 4.09.0
+opam import import opam.4.09.0.export
+```
+
+
+
+Trouble Shooting
+----------------
 
 ##### `dllz3ml.so`: undefined symbol: `Z3_rcf_del`
 ```
@@ -7,11 +23,10 @@ Error: Error on dynamically loaded library: /home/einar/.opam/4.09.0/lib/z3/dllz
 See [OCaml Linking Problems #2355](https://github.com/Z3Prover/z3/issues/2355)
 
 Downgrade `z3` from newest 4.8.6 to 4.7.1 and add a pin.
-```
-`apt-get install opam`
-`opam switch create 4.09.0`
-`opam install z3 4.7.1`
-`opam pin add z3 4.7.1`
+
+```bash
+opam install z3 4.7.1
+opam pin add z3 4.7.1
 ```
 
 

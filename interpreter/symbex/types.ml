@@ -35,8 +35,8 @@ type instr =
     | Store
     | Load
     | Done
-    | HCF
-    | Declare of word
+    | Unreachable
+    | Local of word
 
 let init_state : state = (0l, Store.empty, [])
 

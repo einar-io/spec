@@ -10,6 +10,14 @@ open Z3.Arithmetic.Integer
 *)
 let vector_length = 32
 
+let print_ith_assertion last_index (i : int) a =
+    let offset = last_index - 1 - i in
+    print_endline 
+        @@ "Assertion[" 
+        ^ string_of_int offset
+        ^ "]:"
+        ^ Expr.to_string a
+
 (* Prove that `a < b, b < c, a > c` is not satisfiable in integers.
  * (but maybe is in bitvectors)
  *)
@@ -18,15 +26,18 @@ let transitivity ( ctx : context ) =
     (* (declare-const x Int) *)
     let a = BitVector.mk_const_s ctx "a" vector_length in
     let b = BitVector.mk_const_s ctx "b" vector_length in
-    let c = BitVector.mk_const_s ctx "c" vector_length in
+    (*let c = BitVector.mk_const_s ctx "c" vector_length in*)
+    let c = BitVector.mk_numeral ctx "1" vector_length in
 
     let sts = [mk_slt ctx a b;
                mk_slt ctx b c;
                mk_slt ctx a c] in
 
+    List.iteri (print_ith_assertion @@ List.length sts) sts;
     (* (assert (sts)) *)
     let g = (Goal.mk_goal ctx true false false) in
     Goal.add g sts;
+    print_endline @@ Goal.to_string g;
 
     let solver = (Solver.mk_solver ctx None) in
 
@@ -94,8 +105,11 @@ let overflow ( ctx : context ) =
                mk_sge ctx z (mk_add ctx a b)] in
 
     (* (assert (sts)) *)
+    let () = print_endline @@ "Assertions: " in
+    let () = List.iter (fun x -> print_endline @@ Expr.to_string x) sts in
     let g = (Goal.mk_goal ctx true false false) in
-    Goal.add g sts;
+    let () = Goal.add g sts in
+    let () = print_endline @@ Goal.to_string g in
 
     let solver = (Solver.mk_solver ctx None) in
 

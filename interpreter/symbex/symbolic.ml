@@ -50,7 +50,7 @@ let symStep ((ip, next, symmem, symstack, pc) as symstate) instr : symstate list
     (* Not implemented *)
     | Show, _ | Read, _           -> []
 
-    | Declare sv, _                -> [(ip+1l, next+1l, symmem, SAny next::symstack, pc)]
+    | Local sv, _                -> [(ip+1l, next+1l, symmem, SAny next::symstack, pc)]
 
     (* Illegal instruction-stack pair *)
     | _, _                        -> []

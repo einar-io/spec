@@ -1,16 +1,7 @@
 open Z3
 open Z3.Arithmetic
-(*
-open Z3.Goal
-open Z3.Expr
-open Z3.Solver
-open Z3.Log
-open Z3.Arithmetic.Integer
-*)
 
-(* Prove that `a < b, b < c, a > c` is not satisfiable in integers.
- * (but maybe is in bitvectors)
- *)
+(* Prove that `a < b, b < c, a > c` is not satisfiable in integers. *)
 let transitivity ( ctx : context ) =
 
     (* (declare-const x Int) *)
@@ -21,12 +12,12 @@ let transitivity ( ctx : context ) =
     let sts = [mk_lt ctx a b; mk_lt ctx b c; mk_lt ctx a c] in
 
     (* (assert (sts)) *)
-    let g = (Goal.mk_goal ctx true false false) in
+    let g = Goal.mk_goal ctx true false false in
     Goal.add g sts;
 
     let solver = (Solver.mk_solver ctx None) in
 
-    (List.iter (fun a -> (Solver.add solver [ a ])) (Goal.get_formulas g)) ;
+    List.iter (fun a -> Solver.add solver [ a ]) (Goal.get_formulas g);
 
     (* (check-sat) *)
     let satisfiability = (Solver.check solver []) in
@@ -85,8 +76,8 @@ let main () =
     let cfg = [("model", "true"); ("proof", "false")] in
     let ctx = (Z3.mk_context cfg) in
 
-    let t = transitivity ctx in
-    let c = cyclic ctx in
+    let _ = transitivity ctx in
+    let _ = cyclic ctx in
 
     if with_log 
         then (Log.append "Exiting `main ()`";
@@ -94,4 +85,5 @@ let main () =
         else ()
 
 
-let () = try Printf.printf "Test: arithmetic.z3.ml\n"; main () with Error msg -> print_endline @@ "Z3 Exception thrown: " ^ msg
+let () = try Printf.printf "Test: arithmetic.z3.ml\n"; main () 
+        with Error msg -> print_endline @@ "Z3 Exception thrown: " ^ msg
