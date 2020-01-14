@@ -9,40 +9,24 @@ let rec gather_free pc =
     | SNot a      -> gather_free a
     | SCon a      -> Symset.empty
     | SAny a as e -> Symset.singleton e
+    | SAnd (a, b) -> Symset.union (gather_free a) (gather_free b)
     | SAdd (a, b) -> Symset.union (gather_free a) (gather_free b)
     | SEq  (a, b) -> Symset.union (gather_free a) (gather_free b)
     | SOr  (a, b) -> Symset.union (gather_free a) (gather_free b)
-    | SAnd (a, b) -> Symset.union (gather_free a) (gather_free b)
     | SLt  (a, b) -> Symset.union (gather_free a) (gather_free b)
 
 
+let combine_assertions pcs =
+    let acc = SCon 1l in
+    List.fold_left (fun x y -> SAnd (x, y)) acc pcs
+
+
 let sym_to_z3 ctx = function
-    | (SAny i) ->
+    | SAny i when 0l <= i && i < 1073741824l ->
         let expr_id = Symbol.mk_int ctx (Int32.to_int i) in
         let z3_expr = BitVector.mk_const ctx expr_id wordsize in
         (i, z3_expr)
-    | _   -> raise @@ Error "Constructor was not SAny."
-
-
-let combine_assertions pcs =
-    let ne = (SCon 1l) in
-    List.fold_left (fun x y -> SAnd (x, y)) ne pcs
-
-
-let rec tree_mapper ctx symvar_map pc =
-    let s2s = tree_mapper ctx symvar_map in
-    match pc with
-    | SNot a      -> BitVector.mk_not ctx (s2s a)
-    | SAny a      -> SMTmap.find a symvar_map
-    | SAdd (a, b) -> BitVector.mk_add ctx (s2s a) (s2s b)
-    | SEq  (a, b) -> Boolean.mk_eq ctx (s2s a) (s2s b)
-    | SOr  (a, b) -> BitVector.mk_or ctx (s2s a) (s2s b)
-    | SCon a      -> BitVector.mk_numeral ctx (Int32.to_string a) wordsize
-    | SAnd (a, b) -> BitVector.mk_and ctx (s2s a) (s2s b)
-    | SLt  (a, b) -> BitVector.mk_slt ctx (s2s a) (s2s b)
-
-
-let sym_to_smt ctx symvar_map pcs = List.map (tree_mapper ctx symvar_map) pcs
+    | _   -> raise @@ Error "Constructor was not `SAny` or too many symbolic variables."
 
 
 let is_false ctx bv =
@@ -53,13 +37,38 @@ let is_true ctx bv =
     Boolean.mk_not ctx @@ is_false ctx bv
 
 
+let sbooltosbv ctx bv =
+    Boolean.mk_ite ctx bv
+        (BitVector.mk_numeral ctx "1" wordsize)
+        (BitVector.mk_numeral ctx "0" wordsize)
+
+
+let rec tree_mapper ctx symvar_map pc =
+    let s2s = tree_mapper ctx symvar_map in
+    match pc with
+    | SNot a      -> sbooltosbv ctx @@ is_false ctx (s2s a)
+    | SAny a      -> SMTmap.find a symvar_map
+    | SCon a      -> BitVector.mk_numeral ctx (Int32.to_string a) wordsize
+    | SEq  (a, b) -> Boolean.mk_eq ctx (s2s a) (s2s b)
+    | SAdd (a, b) -> BitVector.mk_add ctx (s2s a) (s2s b)
+    | SOr  (a, b) -> BitVector.mk_or ctx (s2s a) (s2s b)
+    | SAnd (a, b) -> BitVector.mk_and ctx (s2s a) (s2s b)
+    | SLt  (a, b) -> BitVector.mk_slt ctx (s2s a) (s2s b)
+
+
+let sym_to_smt ctx symvar_map pcs = List.map (tree_mapper ctx symvar_map) pcs
+
+
+
+
+
 let bv_mk_and ctx bv1 bv2 =
     Boolean.mk_and ctx [is_true ctx bv1; is_true ctx bv2]
 
 
 let conjoin ctx pc =
     match pc with
-    | [] -> BitVector.mk_numeral ctx "1" wordsize
+    | [] -> Boolean.mk_true ctx
     | pc -> Boolean.mk_and ctx @@ List.map (is_true ctx) pc
 
 
@@ -93,13 +102,13 @@ let check_pc pcs =
         Z3.Log.append "Entering `check_pc ()`.."
     ) else ();
 
-    let cfg = [("model", "true" );
+    let cfg = [("model", "false");
                ("proof", "false");
-               ("timeout", "10000"); (*10k miliseconds *)
+               ("timeout", "10000"); (* miliseconds *)
                ("trace", "true");
                ("trace_file_name", "smt-trace.log");
-               ("unsat_core", "false");
-               ] in
+               ("unsat_core", "false");]
+    in
     let ctx = Z3.mk_context cfg in
 
     (* PART2: construct list with above assertions *)
@@ -122,21 +131,20 @@ let check_pc pcs =
     List.iter (fun a -> Solver.add solver [a]) (Goal.get_formulas g);
 
     let status = Solver.check solver [] in
-
+    
+    let colored_status = Utils.color status in
+    
     (* Logging and printing *)
-    let stmsg = "Returns: " ^ Solver.string_of_status status in
+    let stmsg = "Returns: " ^ colored_status in
 
     print_endline stmsg; 
 
-    if with_log 
-        then (Log.append stmsg; 
-              Log.close ())
-        else ();
+    if with_log then (Log.append stmsg; Log.close ()) else ();
 
     (* Return *)
     match status with
+    | UNKNOWN
     | SATISFIABLE   -> true
-    | UNKNOWN       -> true
     | UNSATISFIABLE -> false
 
 

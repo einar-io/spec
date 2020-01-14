@@ -18,7 +18,7 @@ let rec render_sym (s : symword) : string =
     | SAnd (s, t) -> "(" ^ render_sym s ^ " && " ^ render_sym t ^ ")"
     | SOr  (s, t) -> "(" ^ render_sym s ^ " || " ^ render_sym t ^ ")"
     | SLt  (s, t) -> "(" ^ render_sym s ^ " < " ^ render_sym t ^ ")"
-    | SNot c      -> "~(" ^ render_sym c ^ ")"
+    | SNot c      -> "(i32.neg " ^ render_sym c ^ ")"
     | SCon w      -> "(i32.const " ^ Int32.to_string w ^ ")"
     | SAny v      -> "(local $" ^ (v
                                    |> (+) 97l
@@ -83,6 +83,7 @@ let rec draw_tree ?(indent = 0l) (tree : symstate tree) =
                       print_indented @@ "SymMemory: " ^ print_symmem symmem;
                       print_indented @@ "SymStack: " ^ print_symstack symstack;
                       print_indented @@ "Path Constraints: " ^ print_pc pc;
+                      print_indented @@ "Satisfiable?: "; (* ^ print_pc pc; *)
                       (* print_indented @@ "Solved Values: " ^ * print_solved_values ""; *)
                       (* print_indented @@ "Indentation level: " ^ * Int32.to_string indent; *)
                       print_indented @@ "|";
@@ -96,3 +97,14 @@ let print_halt () = Printf.printf "\n[HALT]\n"
 let print_ith_assertion last_index (i : int) a =
     let offset = string_of_int @@ last_index - 1 - i in
     Printf.printf "Assertion[%s]: %s\n" offset (Z3.Expr.to_string a)
+
+
+let color status =
+    let open Z3 in
+    let open ANSITerminal in
+    let text = Solver.string_of_status status in
+    match status with
+    | UNKNOWN       -> sprintf [yellow] "%s" text
+    | SATISFIABLE   -> sprintf [blue; on_black] "%s" text
+    | UNSATISFIABLE -> sprintf [red; Blink; on_white] "%s" text
+

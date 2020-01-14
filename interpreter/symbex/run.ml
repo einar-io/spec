@@ -1,6 +1,7 @@
-open Symbolic
 open Types
 open Programs
+open Symbolic
+let run = Symbolic.print_sym_res
 
 (*
 let () = print_sym_res "emptyPrg" emptyPrg init_symstate
@@ -16,4 +17,5 @@ let () = print_sym_res "storeLoadAddPrint" storeLoadAddPrint init_symstate
 (*infinite loop*)
 (* let () = print_sym_res "prgLoop" prgLoop init_symstate *)
 
-let () = print_sym_res "prunablePrg" prunablePrg init_symstate
+
+let () = run "prunablePrg" prunablePrg init_symstate

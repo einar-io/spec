@@ -6,10 +6,12 @@ Installation
 ------------
 
 ```bash
-apt-get install opam
+apt-get install opam otags ocamlbuild
 opam create switch 4.09.0
 opam import import opam.4.09.0.export
 ```
+
+Package used: `ocamlfind`, `utop`, `z3`, `merlin`, `ansiterminal`.
 
 
 
